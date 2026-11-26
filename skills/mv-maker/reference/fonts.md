@@ -40,7 +40,7 @@ Typical mappings
 | Tall condensed caps, cinematic / news | `Anton`, `Oswald:700`, `Barlow Condensed:800`, `Big Shoulders Display:900` (`Bebas Neue` = Latin only) |
 | Clean geometric pop | `Montserrat:800`, `Plus Jakarta Sans:800`, `Be Vietnam Pro:800` |
 | Elegant high-contrast serif, luxury / romance | `Playfair Display:700i`, `Prata`, `Cormorant Garamond:600i` |
-| Handwritten / diary / acoustic | `Caveat:700`, `Patrick Hand`, `Dancing Script:700` |
+| Handwritten / diary / acoustic | `Patrick Hand`, `Dancing Script:700`, `Caveat:700` (Latin only - no Vietnamese) |
 | Script retro / summer | `Pacifico`, `Lobster` |
 | Street / graffiti / hip-hop | `Bungee`, `Sedgwick Ave Display`, `Permanent Marker` (Latin only) |
 | Techno / gaming / EDM | `Chakra Petch:700`, `Exo 2:800`, `Orbitron:900` (Latin only) |

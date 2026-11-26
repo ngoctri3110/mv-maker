@@ -34,7 +34,7 @@ kpop-stage:
 
 lofi-chill:
   description: "Matte VHS, slow handheld drift, typewriter lyrics - lo-fi, chill, acoustic, late night"
-  defaults: {lyric_style: typewriter, font: "Caveat:700", caption_anim: fade, accent: "#E7B98A", fade_out: 2.0}
+  defaults: {lyric_style: typewriter, font: "Patrick Hand", caption_anim: fade, accent: "#E7B98A", fade_out: 2.0}
   shot: {fx: ["grade:matte", "vhs", "handheld:0.6", "vignette"], transition: "dissolve:1.0"}
 
 rap-kinetic:
@@ -66,3 +66,143 @@ vintage-90s:
   description: "VHS home-video look, warm kodak grade, 4:3-style bars, word-by-word lyrics - throwback, nostalgia"
   defaults: {lyric_style: word, font: "VT323", accent: "#FFB347"}
   shot: {fx: ["grade:kodak", "vhs", "grain:14", "vignette"], transition: "fadeblack:0.5"}
+
+rock-grunge:
+  description: "Gritty bleach grade, grain, hard cuts and shake on hits, distressed lyrics - rock, punk, band performance"
+  defaults: {lyric_style: grunge, display_font: "Anton", font: "Oswald:700", accent: "#FF3B30", typo: {upper: true},
+             cut_lead: 1f}
+  shot: {fx: ["grade:bleach", "contrast:1.12", "grain:16", "vignette"], transition: cut}
+  sections:
+    pre: {beat_fx: [zoom], beat_every: 2}
+    chorus: {beat_fx: [shake, flash], beat_every: 1, transition: "flashblack:0.2"}
+    bridge: {fx: ["grade:noir"], transition: "fadeblack:0.6"}
+
+rnb-night:
+  description: "Moody low-key night, soft bloom, slow dissolves, elegant karaoke lyrics - R&B, soul, late-night love"
+  defaults: {lyric_style: subtitle, lyric_anim: rise, font: "Josefin Sans:600", display_font: "Playfair Display:600i",
+             accent: "#C59BFF", typo: {shadow: 1.5}}
+  shot: {fx: ["grade:moody", "bloom:0.28", "grain:6"], transition: "dissolve:0.6"}
+  sections:
+    chorus: {lyric_style: karaoke, fx: ["glow:0.25"]}
+    bridge: {fx: ["grade:noir"], transition: "fadeblack:0.8"}
+
+pop-bright:
+  description: "Clean bright colour, glow, slide/zoom cuts, beat zoom in the chorus, pop-in lyrics - pop, V-pop, dance-pop"
+  defaults: {lyric_style: subtitle, lyric_anim: pop, font: "Nunito:900", display_font: "Paytone One", accent: "#FF4F9A",
+             cut_lead: 1f}
+  shot: {fx: ["sat:1.18", "bright:0.03", "glow:0.22", "sharpen:0.5"], transition: "slideup:0.25"}
+  sections:
+    pre: {beat_fx: [zoom], beat_every: 2}
+    chorus: {beat_fx: [zoom, flash], beat_every: 1, lyric_style: karaoke, transition: "zoom:0.3"}
+    bridge: {transition: "dissolve:0.6", lyric_style: subtitle}
+
+# ---------------------------------------------------------------------------------------------------------------
+# Lyric-video templates (`kind: lyric-template`). Text is the hero; shots without `layers:` get the template's
+# generated `scenes` (gen: backgrounds, no footage needed), cycling for scene variety. Colours: `palette` ($1 $2 $3)
+# + `accent` ($a); `themes` are ready colour variants (storyboard `theme: <name>`), or set your own `palette:`
+# from the cover (`mv palette cover.jpg`). Quick start: `mv auto <project> --template <name> [--theme <t>]`.
+
+lv-kinetic:
+  kind: lyric-template
+  description: "Kinetic typography: key word huge, the rest small, lines slide in from alternating sides - pop, hip-hop, viral"
+  palette: ["#0f0c29", "#302b63", "#ff2e63"]
+  defaults: {lyric_style: stagger, display_font: "Anton", font: "Montserrat:800", accent: "#FFE45E", lyric_lead: 0.3,
+             visualizer: {type: bars, opacity: 0.6}}
+  scenes: ["gradient:$1,$2,$3", "smoke:$1,$3", "particles:$2,$a"]
+  shot: {fx: ["bright:-0.12"], transition: "zoom:0.3"}
+  sections:
+    chorus: {lyric_style: stack, beat_fx: [zoom], beat_every: 2}
+  themes:
+    sunset: {palette: ["#2b1055", "#d76d77", "#ffaf7b"], accent: "#FFF3B0"}
+    ocean: {palette: ["#021b2e", "#0f4c75", "#3282b8"], accent: "#BBE1FA"}
+
+lv-grunge:
+  kind: lyric-template
+  description: "Grunge / punk: distressed slam-in words with a misprint ghost, scratchy dark texture, shake on hits - rock, punk, rap"
+  palette: ["#111111", "#c9c1b0", "#ff3b30"]
+  defaults: {lyric_style: grunge, display_font: "Anton", font: "Oswald:700", accent: "#FF3B30", typo: {upper: true, size: 1.2},
+             lyric_lead: 0.25}
+  scenes: ["grunge:$1,$2", "smoke:$1,$3"]
+  shot: {fx: ["grain:10"], transition: "glitch:0.2"}
+  sections:
+    chorus: {beat_fx: [shake, flash], beat_every: 1, beat_flash: 0.18}
+  themes:
+    acid: {palette: ["#0a0a0a", "#b6ff3b", "#b6ff3b"], accent: "#B6FF3B"}
+    blue: {palette: ["#0b0f1a", "#9fb4d9", "#3b82ff"], accent: "#3B82FF"}
+
+lv-cozy:
+  kind: lyric-template
+  description: "Cozy / lo-fi: warm dust motes, handwriting, typewriter verses, soft light leaks - acoustic, lo-fi, bedroom pop"
+  palette: ["#2b1d14", "#e7b98a", "#f6d7a7"]
+  defaults: {lyric_style: typewriter, font: "Dancing Script:700", display_font: "Dancing Script:700", accent: "#F6D7A7",
+             lyric_lead: 0.3, fade_out: 2.0, typo: {size: 1.3}}
+  scenes: ["particles:$1,$2", "gradient:$1,$2"]
+  shot: {fx: ["leak:0.25", "grain:8", "vignette"], transition: "dissolve:1.0"}
+  sections:
+    chorus: {lyric_style: karaoke}
+  themes:
+    rain: {palette: ["#141a22", "#8fa6c0", "#c9d6e3"], accent: "#C9D6E3"}
+
+lv-paper:
+  kind: lyric-template
+  description: "Paper cut-out: each line on tilted paper strips popping in over paper texture - indie, folk, cute pop, kids"
+  palette: ["#efe6d2", "#e3d3b4", "#d94f30"]
+  defaults: {lyric_style: paper, font: "Patrick Hand", accent: "#F2C14E", lyric_lead: 0.3,
+             typo: {paper: "#FFFFFF", paper_text: "#1A1A1A", size: 1.2}}
+  scenes: ["paper:$1", "paper:$2"]
+  shot: {transition: "slideup:0.3"}
+  themes:
+    kraft: {palette: ["#c9a37a", "#b88f63", "#3a2a1a"], accent: "#FFE08A"}
+
+lv-glow:
+  kind: lyric-template
+  description: "Glow / neon night: flickering neon lyrics over floating bokeh and haze - EDM, synth-pop, late-night love"
+  palette: ["#05010f", "#1b0f3b", "#ff4fd8"]
+  defaults: {lyric_style: neon, font: "Exo 2:800i", accent: "#00E5FF", lyric_lead: 0.2, typo: {size: 1.15},
+             visualizer: {type: wave, opacity: 0.7}}
+  scenes: ["particles:$1,$a", "smoke:$2,$3"]
+  shot: {fx: ["bloom:0.3"], transition: "zoom:0.3"}
+  sections:
+    chorus: {beat_fx: [flash], beat_every: 1, beat_flash: 0.15}
+  themes:
+    magenta: {palette: ["#0a0010", "#2b0030", "#00e5ff"], accent: "#FF4FD8"}
+
+lv-minimal:
+  kind: lyric-template
+  description: "Minimal colour blocks: bold flat colours that swap on the bar, clean uppercase type - pop, indie, brand-style"
+  palette: ["#F2C14E", "#1D3557", "#E63946"]
+  defaults: {lyric_style: subtitle, lyric_anim: pop, font: "Montserrat:800", display_font: "Anton", accent: "#F2C14E",
+             typo: {upper: true, shadow: 0, size: 1.35}, lyric_area: [0.08, 0.40, 0.92, 0.60]}
+  scenes: ["blocks:$1,$2,$3", "solid:$2"]
+  shot: {transition: "wipeleft:0.3"}
+  sections:
+    chorus: {lyric_style: stack}
+  themes:
+    mono: {palette: ["#f5f5f5", "#111111", "#ff3b30"], accent: "#FF3B30"}
+    pastel: {palette: ["#ffd6e0", "#7b9acc", "#fcf6b1"], accent: "#FFFFFF"}
+
+lv-cinematic:
+  kind: lyric-template
+  description: "Cinematic titles: drifting fog, cinema bars, serif lyrics rising softly, centred title card - ballad, soundtrack, epic"
+  palette: ["#07070a", "#8a96c8", "#d9b26f"]
+  defaults: {lyric_style: subtitle, lyric_anim: rise, font: "Playfair Display:600i", display_font: "Playfair Display:600",
+             accent: "#D9B26F", lyric_lead: 0.25, fade_out: 2.5, typo: {size: 1.2}}
+  scenes: ["smoke:$1,$2", "particles:$1,$3"]
+  shot: {fx: ["letterbox:0.1", "grain:6"], transition: "dissolve:1.0"}
+  sections:
+    chorus: {lyric_style: karaoke}
+  themes:
+    ember: {palette: ["#0a0604", "#c0622e", "#ffcf8a"], accent: "#FFCF8A"}
+
+lv-retro:
+  kind: lyric-template
+  description: "Retro CRT: scanlines, rolling bar, terminal font typing in, VHS bleed - synthwave, 8-bit, 80s/90s throwback"
+  palette: ["#050a08", "#40ff9a", "#ff4fd8"]
+  defaults: {lyric_style: typewriter, font: "VT323", display_font: "VT323", accent: "#40FF9A", typo: {upper: true, size: 1.5},
+             lyric_lead: 0.3}
+  scenes: ["crt:$1,$2", "crt:$1,$3"]
+  shot: {fx: ["vhs", "glow:0.3"], transition: "glitch:0.2"}
+  sections:
+    chorus: {lyric_style: neon}
+  themes:
+    amber: {palette: ["#0a0600", "#ffb000", "#ff6a00"], accent: "#FFB000"}

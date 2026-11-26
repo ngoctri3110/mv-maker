@@ -1,0 +1,23 @@
+# Four lyric-video styles on generated backgrounds (no footage): grunge, paper cut-out, highlighter marker,
+# kinetic stagger - plus an audio spectrum. Demo lyrics are Vietnamese to show diacritics.
+title: "Demo: kinetic lyric styles"
+slug: lyric-kinetic
+lang: en
+audio: audio/song.mp3
+format: "9:16"
+accent: "#FFD24D"
+lyrics_file: lyrics.yaml
+lyric_lead: 0.3
+display_font: "Anton"
+font: "Be Vietnam Pro:800"
+visualizer: {type: bars, opacity: 0.55}
+sources:
+  grunge_bg: {gen: "grunge:#111111,#c9c1b0"}
+  paper_bg: {gen: "paper:#efe6d2"}
+  smoke_bg: {gen: "smoke:#0d0d12,#8a96c8"}
+  grad_bg: {gen: "gradient:#0f0c29,#302b63,#ff2e63"}
+shots:
+  - {id: K1, start: 0, end: 8, lyric_style: grunge, caption: "1 · grunge", caption_style: credit, layers: [{src: grunge_bg}], beat_fx: [shake], beat_every: 4, transition: "glitch:0.2"}
+  - {id: K2, start: 8, end: 12, lyric_style: paper, caption: "2 · paper cut-out", caption_style: credit, layers: [{src: paper_bg}], transition: "slideup:0.3"}
+  - {id: K3, start: 12, end: 16, lyric_style: marker, caption: "3 · highlighter marker", caption_style: credit, layers: [{src: smoke_bg}], transition: "zoom:0.3"}
+  - {id: K4, start: 16, end: 24, lyric_style: stagger, caption: "4 · kinetic stagger", caption_style: credit, layers: [{src: grad_bg}]}

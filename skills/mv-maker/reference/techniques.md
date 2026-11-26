@@ -36,6 +36,8 @@ graphic contrast is the point, e.g. "you / me", before / after, a beat-heavy dan
 | R-SMOOTH-SLOW | Optical-flow slow motion | Silky slow-mo from 24/30 fps footage | layer `speed: 0.4, smooth: true` (CPU heavy) | ✅ |
 | R-HANDHELD | Handheld drift | Intimate, documentary, lo-fi | `fx: [handheld]` (`handheld:0.5` subtler) | ✅ |
 | R-MOTION-BLUR | Motion blur | Smooth fast movement, ramps, whips | `fx: [motionblur]` | ✅ |
+| R-CUT-LEAD | Cut 1-2 frames early | Cuts feel exactly on the beat (the eye lags ~1-2 frames) - every beat-driven MV | `cut_lead: 1f` | ✅ |
+| R-LIPSYNC | Lip-synced performance | Artist mimes the song; stays in sync on every cut, multi-cam between takes | `mv sync`, layer `lipsync: true` | ✅ |
 
 ## 3. Transitions
 | ID | Name | Meaning | storyboard | |
@@ -87,10 +89,20 @@ Finishing: `letterbox[:0.1]` cinema bars · `leak[:0.4]` drifting warm light lea
 | K-BILINGUAL | Bilingual lines | International songs, foreign fans | `original | translation` in lyrics.txt |
 | K-POSTER | Poster player (cover + lyrics + progress bar) | Only a cover image, quick lyric video | `layout: poster` |
 | K-TITLE | Centred title | Open/close, song title | `caption_style: title` |
+| K-GRUNGE | Distressed slam-in words | Rock, punk, rap | `lyric_style: grunge` |
+| K-PAPER | Paper cut-out strips | Indie, folk, cute | `lyric_style: paper` |
+| K-MARKER | Highlighter as sung | Sing-along, emphatic lines | `lyric_style: marker` |
+| K-STAGGER | Kinetic key-word layout | Kinetic-typography lyric videos | `lyric_style: stagger` (+ `emph:`) |
+| K-TEMPLATE | Lyric-video template | Whole lyric video from a look in one step | `mv auto --template lv-...` |
+| K-SPECTRUM | Audio spectrum / wave | Lyric videos, visualizers | `visualizer: {type: bars}` |
+| L-GEN-BG | Generated background | No footage: smoke, bokeh, paper, grunge, blocks, CRT, gradient | source `gen: "smoke:$1,$3"` |
 
 ## 6. Storytelling devices (concept level)
 | ID | Device | Description |
 |---|---|---|
+| S-INTERCUT | Performance / story intercut | Verses on the story, choruses on the performance, bridge breaks the pattern; `role:` per shot (genres.md) |
+| S-COVERAGE | Size progression | Wide → medium → close as emotion rises; change `size:` on every cut from the same source (no jump cuts) |
+| S-TITLE-CARD | Official title card | Artist + "Title" lower-left over the intro, end card at the close (`title_card`, `end_card`) |
 | S-MOTIF | Recurring image | An object/shape at the start and the end (a door, a piano) → the story closes its loop |
 | S-THEN-NOW | Then and now | Same person/place/song at two moments; combine with C-SPLIT-SOFT or C-PIP |
 | S-CALLBACK | Callback | Final chorus flashes back through earlier shots (R-ACCEL) |
@@ -111,7 +123,9 @@ Finishing: `letterbox[:0.1]` cinema bars · `leak[:0.4]` drifting warm light lea
 
 ## Rules of thumb
 - Cut on the beat; big changes on downbeats/section starts; never cut mid-word.
-- Average shot: verse 2.5-4 s, chorus 0.8-2 s; vary it.
+- Average shot depends on the genre (`reference/genres.md`, `mv check`): ballad verse 2.5-5 s, pop chorus 0.8-2 s,
+  EDM drop 0.25-1 s; the last chorus is the fastest-cut section.
+- Change shot size on every cut from the same source; intercut performance / story / b-roll.
 - Max 2-3 layers at once; overlays at 25-50 % opacity.
 - One signature look per section; save the strongest effect (shake, flash burst) for 1-2 moments.
 - Keep faces/text out of the bottom ~20 % and right ~12 % in 9:16 (platform UI).

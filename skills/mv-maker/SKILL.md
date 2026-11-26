@@ -14,15 +14,19 @@ The first run installs everything into `SKILL_DIR/.venv` (Python deps + font pac
 Python 3.10+. FFmpeg is required for analysis/rendering, but setup can finish without it so the
 skill can be installed first; `mv doctor` reports the missing renderer and the exact install command.
 Projects live in the user's working directory: `projects/<slug>/` (audio, sources, storyboard, outputs).
-New user / "does it work?" → `mv demo story` (also `blur`, `lyric-poster`, `lyric-styles`, `all`) renders a demo
+New user / "does it work?" → `mv demo story` (also `blur`, `lyric-poster`, `lyric-styles`, `pro`, `genre-mv`, `lyric-kinetic`, `lyric-template`, `all`) renders a demo
 with synthetic media in `projects/demo-*`.
 
 References (read when needed):
 - `reference/storyboard-schema.md` - every field, layout, fx, transition the renderer supports
+- `reference/genres.md` - **how professional MVs are cut, genre by genre** (performance / story / b-roll intercut,
+  shot-size coverage, lip-sync, shot length per section, cut lead); numbers in `genres.yaml`, measured by `mv check`.
+  Read it before planning a footage-led MV.
 - `reference/techniques.md` - **technique catalogue with IDs** (composition, rhythm, transitions, looks, lyrics,
   storytelling devices), mood → quick picks, platform specs. Read it before proposing techniques.
-- `reference/lyrics.md` - **lyric styles catalogue** (subtitle, karaoke, word, typewriter, stack, neon, scroll),
-  MV-with-lyrics vs lyric video vs **poster player** (one cover image -> lyric video), fonts, readability rules
+- `reference/lyrics.md` - **lyric styles catalogue** (subtitle, karaoke, word, typewriter, stack, neon, scroll, grunge,
+  paper, marker, stagger), **lyric-video templates** (`mv auto`), MV-with-lyrics vs lyric video vs **poster player**
+  (one cover image -> lyric video), fonts, readability rules
 - `reference/fonts.md` - **fonts & lettering**: any Google Font by spec (`"Kanit:900i"`), catalogue by look and
   language, matching lyric lettering to a poster (recipe + mappings), `typo` (case, colour, outline, shadow, slant)
 - `reference/storyboard-template.yaml` - worked example of every layout
@@ -69,6 +73,10 @@ scene ideas per section, platform/aspect (9:16 vs 16:9), full song or a 60s cut.
 Decide the **video type** early, it changes everything (details in `reference/lyrics.md`):
 A. music MV with lyrics (footage-led) · B. lyric video (text-led) · C. poster player (one cover image + lyric panel).
 If the user only has a poster/cover image, propose C (and B as an upgrade if they want footage).
+For A also settle the **genre** (`genre:` - ballad, pop, kpop, rap, edm, rock, indie, rnb; `reference/genres.md`) and what
+footage exists: performance (artist singing to camera, shot to playback), story, b-roll.
+For B without footage, the fast path is a **template**: `mv analyze` → `mv auto <p> --template lv-<look>` (generated
+backgrounds, scene changes with the song, title card) → review/approve → render; customise on top (lyrics.md).
 
 ### 2. Analyze the song + time the lyrics
 `mv analyze projects/<slug> --lyrics` -> `analysis.json`: tempo, beat times, downbeats, energy sections,
@@ -107,6 +115,10 @@ ideas they would not have thought of - not just their own description played bac
    Propose the 1-2 that fit the song as the base (`preset: <name>`), then customise shots on top; shots with
    `section: chorus/drop/verse/bridge` pick up the preset's section extras automatically.
 7. Each shot gets `technique: [IDs]` and, where a real choice exists, `alt: ["option 2: ..."]`.
+8. **Professional MV grammar** (type A, `reference/genres.md`): per section the role mix from the genre (verses on the
+   story, choruses on the performance, the bridge breaks the pattern), `role:` and `size:` on every shot, a size change
+   on every cut from the same source, shot lengths in the genre's range, the last chorus cut fastest, `cut_lead: 1f`
+   for beat-driven songs, `title_card` over the intro and `end_card` at the close.
 
 ### 4. Storyboard -> GATE 1
 Write `storyboard.yaml`:
@@ -115,7 +127,9 @@ Write `storyboard.yaml`:
 - Map each moment to a technique using `reference/techniques.md` (nostalgia -> split singer/fans + warm grain + dissolve,
   chorus/drop -> faster cuts + flash, bridge -> bw/slow-mo, memory -> screen-blend overlay ...).
 - Every footage need becomes a `sources:` entry with `note` + `search` (what to find). No URLs yet is fine.
-Then `mv review projects/<slug>` -> `storyboard.md`, and `mv render projects/<slug> --mode proxy` -> an
+Then `mv review projects/<slug>` -> `storyboard.md` (with an **Edit check** table when `genre:` or `role:`/`size:` are set:
+shot length per section vs the genre, performance share, jump cuts, size variety, off-beat cuts, hook, energy build -
+fix real problems before showing it; `mv check` prints the same), and `mv render projects/<slug> --mode proxy` -> an
 **animatic** (missing footage shows as labelled cards, real audio + captions + transitions).
 Show the user `storyboard.md` + the animatic path, and summarise in chat: the song reading in 2-3 lines,
 the ⭐ recommendation per section, the wow moments, and how to pick alternatives (e.g. `S03 -> option 2`).
@@ -137,6 +151,9 @@ Search in English with concrete visual words ("rain on window at night, neon ref
 `--orient portrait` for 9:16. Show the user the chosen list (thumbnails + licence) and **wait for OK before
 downloading**. Then `mv fetch projects/<slug>` (direct files capped at `--max-mb 300`; Commons videos use ≤1080p
 transcodes). `out/credits.txt` (written on final render or `mv credits`) lists attributions for the description.
+**Performance footage** (the artist singing, shot to the song's playback): after it is in `sources/`, run
+`mv sync projects/<slug> <source_id>` (matches the clip's own sound to the song, writes `sync:` to picks.yaml; check
+the confidence it prints) and use layers `{src: <id>, lipsync: true}` - every cut stays lip-synced, no `in:` needed.
 
 ### 6. Pick exact moments
 `mv sheet projects/<slug> <source_id> --every 2` makes `refs/sheet_<id>.jpg` with timecodes - **open the image and look**

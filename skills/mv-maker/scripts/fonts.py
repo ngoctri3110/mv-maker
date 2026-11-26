@@ -65,7 +65,7 @@ CATALOG = [
     ("Dancing Script", "script", "love sweet romantic", "latin vietnamese", False),
     ("Pacifico", "script retro", "summer surf fun", "latin vietnamese cyrillic", False),
     ("Great Vibes", "calligraphy", "wedding romantic luxury", "latin vietnamese cyrillic", False),
-    ("Caveat", "handwriting", "diary casual acoustic", "latin vietnamese cyrillic", False),
+    ("Caveat", "handwriting", "diary casual acoustic", "latin cyrillic", False),
     ("Patrick Hand", "handwriting", "notes cute school", "latin vietnamese", False),
     ("Sedgwick Ave Display", "graffiti", "street hiphop rap", "latin vietnamese", False),
     ("Permanent Marker", "marker", "street raw diy", "latin", False),

@@ -4,7 +4,14 @@
 | field | default | meaning |
 |---|---|---|
 | `title`, `slug`, `concept` | | display / output name / one-paragraph idea (shown in storyboard.md) |
-| `preset` | | style preset from `reference/presets.yaml` (`mv presets`); explicit values win, shots opt out with `preset: false` |
+| `preset` | | style preset or lyric-video template from `reference/presets.yaml` (`mv presets`); explicit values win, shots opt out with `preset: false` |
+| `theme` | | a colour variant of the preset (`themes:` in presets.yaml), e.g. `theme: sunset` |
+| `palette` | preset's | list of colours `$1 $2 $3` used by generated backgrounds (`gen:`); pick from the cover with `mv palette` |
+| `genre` | | cutting grammar for the edit check: `ballad` `pop` `kpop` `rap` `edm` `rock` `indie` `rnb` (`mv genres`, genres.md) |
+| `cut_lead` | 0 | cut picture this much BEFORE each shot boundary: `1f`, `2f` (frames) or seconds (≤ 0.2). Audio/lyrics unchanged |
+| `title_card` | | official-MV title: `{artist, title, sub, start, dur, style: official|center|minimal}` (official = lower-left, letter-spaced artist, "Title") |
+| `end_card` | | closing card: `{text, sub, dur, start, style}` (default centred, last `dur` seconds) |
+| `visualizer` | | audio spectrum on any video: `{type: bars|wave, color, opacity, area: [x0, y0, x1, y1]}` (poster videos use `poster.visualizer`) |
 | `lang` | en | language of the `storyboard.md` labels (`en`, `vi`; others fall back to `en`) - set to the user's language |
 | `audio` | | song file, relative to project folder |
 | `format` | `9:16` | `9:16` 1080x1920 · `16:9` 1920x1080 · `1:1` · `4:5` |
@@ -17,12 +24,13 @@
 | `captions` | [] | fine-timed lines `{start, end, text, style, anim}` (song time) |
 | `caption_anim` | fade | default caption animation: `fade` · `rise` · `pop` · `none` |
 | `lyrics_file` | | `lyrics.yaml` from `mv align` (lines with per-word timing) |
-| `lyric_style` | subtitle (scroll for poster) | `subtitle` · `karaoke` · `word` · `typewriter` · `stack` · `neon` · `scroll` (see lyrics.md) |
+| `lyric_style` | subtitle (scroll for poster) | `subtitle` · `karaoke` · `word` · `typewriter` · `stack` · `neon` · `scroll` · `grunge` · `paper` · `marker` · `stagger` (see lyrics.md) |
+| `lyric_lead` | 0.15 | seconds a lyric line appears before it is sung (0.25-0.4 for sing-along lyric videos) |
 | `lyric_highlight` | line | scroll only: `line` or `karaoke` (fill current line word by word) |
 | `lyric_anim` | = caption_anim | subtitle style animation |
 | `lyric_area` | auto | `[x0, y0, x1, y1]` fractions of the frame where lyrics live |
 | `font` / `display_font` | Be Vietnam Pro / Anton | lyric font / big kinetic (stack) font. Font spec: `"Family"`, `"Family:800"`, `"Family:900i"`, `"Family:900i@125"` - any Google Font, downloaded on demand (see fonts.md) |
-| `typo` | | lettering: `{upper, color, outline_color, outline, shadow, shadow_color, spacing, slant, bold}` (see fonts.md) |
+| `typo` | | lettering: `{upper, color, outline_color, outline, shadow, shadow_color, spacing, slant, bold, size}` (see fonts.md); `size` scales every lyric style (1.3 = 30 % bigger); `paper` / `paper_text` colour the paper style, `marker_ink` the marker style's inked words |
 | `accent` | #FFD24D | accent colour: karaoke fill, neon glow, stack highlight, progress bar |
 | `poster` | | poster player: `{title, artist, title_font, artist_font, progress: true, time: true, visualizer: wave|bars|none, visualizer_color}` |
 | `song_reading`, `look` | | review only: interpretation of the song / overall palette + signature + motif |
@@ -30,6 +38,9 @@
 | `wow_moments` | | review only: list of strings |
 
 Source file lookup: `path` if given, else `sources/<id>.(mp4|mkv|webm|mov|jpg|png...)`. Missing -> placeholder card.
+Source extras: `gen: "<kind>:<colours>"` = generated background, no file needed - `solid`, `gradient`, `blocks`, `smoke`,
+`particles`, `paper`, `grunge`, `crt`; colours `#hex`, `$1`-`$3` (palette) or `$a` (accent), e.g. `gen: "smoke:$1,$3"`.
+`sync: 1.5` = this clip's time at song second 0 (written by `mv sync` into picks.yaml) for `lipsync` layers.
 `picks.yaml` (written by `mv pick` / `mv ingest`) is merged over `sources:` - it adds `url`, `provider`, `creator`,
 `rights`, `page` or a local `path` without touching storyboard.yaml.
 Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
@@ -39,7 +50,9 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 |---|---|
 | `id` | S01... (auto if omitted) |
 | `start`, `end` | song time, seconds or `m:ss.xx` |
-| `section`, `lyric`, `intent` | documentation for review (not rendered) |
+| `section`, `lyric`, `intent` | documentation for review; `section` also picks preset section extras (intro, verse, pre, chorus/hook, drop, bridge, outro) |
+| `role` | `performance` · `narrative` · `broll` · `concept` - for the edit check (performance share per section) |
+| `size` | `ews` `wide` `full` `medium` `mcu` `close` `ecu` `insert` `aerial` `pov` - edit check flags jump cuts / no size variety |
 | `layout` | `full` · `split_v` (top/bottom) · `split_h` (left/right) · `split_3v` (3 rows) · `pip` · `fit_blur` (whole source frame centred on its own blurred copy) · `poster` (cover card + blurred cover bg + player UI + lyric panel) |
 | `lyric_style` | per-shot override of the lyric style for lines starting inside this shot |
 | `ratio` | split position for split_v/split_h (0.5) |
@@ -60,6 +73,7 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 |---|---|
 | `src` | source id |
 | `in` | start time inside the original source video |
+| `lipsync` | `true` = `in` follows the song (song time + the source's `sync`), so a performance clip stays lip-synced on every cut; a number = explicit offset. Speed must stay 1 |
 | `speed` | 0.5 = slow-mo, 2 = fast |
 | `focus` | `[x, y]` 0..1 crop anchor when aspect differs (e.g. `[0.5, 0.3]` keep faces) |
 | `zoom` | `in` / `out` Ken Burns; `zoom_amount` (0.12) |
@@ -89,3 +103,7 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
   `hblur:0.4`, `zoomin:0.5`, `fadewhite:0.5`, `smoothleft:0.5`, `squeezev:0.4` ...
 
 xfade/dissolve shots get an automatic tail so music sync is kept.
+
+## lyrics.yaml line extras
+`emph: "word"` - the key word of the line for `stagger` (default: the longest word). `section` - from `[Chorus]`
+headers in lyrics.txt; `mv auto` uses it to start new scenes.

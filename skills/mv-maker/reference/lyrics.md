@@ -11,7 +11,8 @@ then keep it consistent per section. Propose 2 options to the user (see SKILL.md
    Reports the % of words matched; < 50 % means wrong order/repeats or noisy transcription.
    No Whisper? `mv align <p> --start 0:12 --end 3:40` spreads lines evenly - then fix times by hand.
 4. Storyboard: `lyrics_file: lyrics.yaml`, `lyric_style:` (global) and optional per-shot `lyric_style:`.
-5. Check timing in the proxy: a line should appear ~0.15 s BEFORE the first sung syllable (built in).
+5. Check timing in the proxy: a line appears `lyric_lead` (default 0.15 s) BEFORE the first sung syllable.
+   Lyric videos read better with 0.25-0.4 s so viewers can sing along (the templates set it).
 6. `mv fonts` once per machine - downloads the Vietnamese-ready font pack.
 
 ## Lyric style catalogue
@@ -24,6 +25,10 @@ then keep it consistent per section. Propose 2 options to the user (see SKILL.md
 | `stack` | BIG uppercase words stacked centre, popping in, longest row in accent | Hook, drop, chorus, viral edits, text-led videos | Display font (Anton). 2-5 words per line work best |
 | `neon` | Glow outline in accent colour, flicker-in | Night city, EDM, retro 80s, love songs at night | Needs dark background (`fx: [bright:-0.3]`) |
 | `scroll` | Apple-Music style list: current line bright, neighbours dim, scrolls up | Lyric videos, poster players, "full lyric" uploads | `lyric_highlight: karaoke` fills the current line word by word |
+| `grunge` | Distressed uppercase rows, tilted, slamming in word by word with an accent misprint ghost | Rock, punk, rap, angry / raw songs | Display font; pair with `gen: grunge` and shake on hits |
+| `paper` | Each row on a tilted paper strip (cut-out label) popping in; longest row on an accent strip | Indie, folk, cute pop, kids, scrapbook mood | `typo.paper` / `typo.paper_text` colours; works on light and dark backgrounds |
+| `marker` | Words get a thick highlighter stroke (accent) and dark ink as they are sung | Sing-along, study/lo-fi, emphatic lines | Best on darker backgrounds; `typo.marker_ink` |
+| `stagger` | Kinetic layout: the key word huge in the display font, the rest small; lines alternate left / right / centre and slide in | Kinetic-typography lyric videos, pop, hip-hop, hooks | Key word = `emph:` on the lyric line, else the longest word |
 
 Mix rules: one style per section; verse calm (`subtitle`/`typewriter`) → chorus loud (`karaoke`/`stack`);
 never more than 3 styles in one MV. Captions (`caption:`) remain for titles/credits/notes.
@@ -34,7 +39,30 @@ never more than 3 styles in one MV. Captions (`caption:`) remain for titles/cred
 - Chorus/hook can switch to `stack` for 1 line to create a "screenshot moment".
 - Hide lyrics during strong visual moments (instrumental, dance break) - just leave those lines out of lyrics.txt.
 
-### B. Lyric video (text-led)
+### B. Lyric video (text-led) - fastest route: a template
+```
+mv analyze projects/<slug>                       # beats, so scene changes land on beats
+mv auto projects/<slug> --template lv-kinetic --title "Song" --artist "Artist" [--theme sunset] [--format 16:9]
+mv render projects/<slug>
+```
+`mv auto` writes `storyboard.yaml`: a new scene every 1-2 lyric lines or at each section change (scene variety keeps
+people watching), the template's generated backgrounds (no footage), a title card, the template's lyric styles per
+section. Then customise like any storyboard: put the user's own footage/poster in some shots (`layers:`), pick colours
+from the cover (`palette:` from `mv palette cover.jpg`, `accent:`), change fonts. Templates (`mv presets`):
+| template | look | genres |
+|---|---|---|
+| `lv-kinetic` | stagger verses, stacked chorus, gradient / smoke / bokeh scenes, spectrum bars | pop, hip-hop, viral |
+| `lv-grunge` | grunge lettering, scratchy dark texture, glitch cuts, shake on chorus hits | rock, punk, rap |
+| `lv-cozy` | handwriting typewriter verses, warm dust motes, light leaks | acoustic, lo-fi, bedroom pop |
+| `lv-paper` | paper strips over paper texture | indie, folk, cute pop |
+| `lv-glow` | neon lines, floating bokeh, haze, wave visualizer | EDM, synth-pop, night love songs |
+| `lv-minimal` | flat colour blocks swapping on the bar, big uppercase type | pop, indie, brand-style |
+| `lv-cinematic` | serif lyrics rising, fog, cinema bars, centred title | ballad, soundtrack, epic |
+| `lv-retro` | CRT scanlines, terminal typing, VHS bleed | synthwave, 8-bit, 80s/90s |
+Match the template to the song's energy and the artwork (as Videobolt-style template sites do): punk → grunge,
+acoustic → cozy/paper, club → glow, ballad → cinematic. Each template has `themes:` (ready colour variants).
+
+Manual lyric videos:
 - Text is the hero: `stack`, `word`, `neon`, `typewriter`; background = slow footage, blur, gradient or loop.
 - Keep backgrounds low-contrast: `fx: [blur:10, bright:-0.25]`, or `fit_blur`.
 - One accent colour taken from the cover/poster.

@@ -1,0 +1,7 @@
+lines:
+- {start: 0.4, end: 3.6, text: "Ngày hôm ấy nắng vàng trên phố"}
+- {start: 4.4, end: 7.6, text: "Em đi qua anh bối rối nhìn theo"}
+- {start: 8.4, end: 11.6, text: "Một mùa hè rực rỡ như chưa từng có"}
+- {start: 12.4, end: 15.6, text: "Mùa hè của em là những giấc mơ"}
+- {start: 16.4, end: 19.6, text: "Cho anh xin một lần được bên em", emph: "lần"}
+- {start: 20.4, end: 23.4, text: "Mãi mãi mùa hè của em", emph: "mãi"}

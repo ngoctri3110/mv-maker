@@ -13,9 +13,13 @@ animatic for you to approve, finds and downloads source clips, and renders the f
 |---|---|
 | ![mv](docs/images/mv-story.jpg) | ![blend](docs/images/blend-split.jpg) |
 
-| 7 animated lyric styles | Lyric video from one poster (9:16 and 16:9) |
+| 11 animated lyric styles | Lyric video from one poster (9:16 and 16:9) |
 |---|---|
-| ![lyrics](docs/images/lyric-styles.jpg) | ![poster](docs/images/poster-9x16.jpg) ![poster](docs/images/poster-16x9.jpg) |
+| ![lyrics](docs/images/lyric-styles.jpg) ![kinetic](docs/images/kinetic-lyrics.jpg) | ![poster](docs/images/poster-9x16.jpg) ![poster](docs/images/poster-16x9.jpg) |
+
+| Pro MV grammar: title card, lip-synced performance / story intercut, end card | 8 lyric-video templates, no footage needed |
+|---|---|
+| ![genre](docs/images/genre-mv.jpg) | ![templates](docs/images/lyric-templates.jpg) |
 
 *(Screenshots use synthetic test footage from `mv demo`.)*
 
@@ -32,12 +36,24 @@ animatic for you to approve, finds and downloads source clips, and renders the f
 - **Rhythm**: cuts on beats, beat-synced zoom pulse / flash / shake, **speed ramps**, **freeze frames**, optical-flow
   slow motion, 35+ transitions (dissolve, flash, glitch, whip, zoom-through, dip to black, circle open, wipes…).
 - **Style presets**: `preset: tiktok-remix` (or cinematic-ballad, kpop-stage, lofi-chill, rap-kinetic,
-  wedding-romance, edm-neon, vintage-90s) gives a coherent professional look in one line.
+  wedding-romance, edm-neon, vintage-90s, rock-grunge, rnb-night, pop-bright) gives a coherent professional look in one line.
+- **Cut like a professional MV, genre by genre** (`genre: pop`): ballad, pop, K-pop, rap, EDM, rock, indie, R&B each
+  have their shot length per section, performance / story balance and cutting point. Shots carry a `role`
+  (performance, narrative, b-roll) and a `size` (wide → close), and `mv check` (also in `storyboard.md`) flags jump
+  cuts, missing size variety, sections cut too slow or too fast, off-beat cuts, a weak 3-second hook and a last chorus
+  that doesn't build. **Lip-sync**: `mv sync` matches a performance clip's own sound to the song, then
+  `lipsync: true` keeps every cut in sync (multi-cam style). `cut_lead: 1f` cuts a frame before the beat; official-style
+  **title card** and **end card**.
+- **Lyric-video templates**: `mv auto <project> --template lv-grunge` builds a whole lyric video from the lyrics -
+  kinetic, grunge, cozy, paper, glow, minimal blocks, cinematic, retro CRT - with **generated backgrounds** (smoke,
+  bokeh, paper, grunge, colour blocks, CRT, gradients; no footage), scenes changing with the song, colour themes, an
+  audio spectrum, and lyrics shown early enough to sing along.
 - **Footage finding**: licence-aware search across Pexels, Pixabay, Wikimedia Commons, Openverse (and YouTube on
   request) with numbered thumbnail sheets the agent looks at, picks recorded with creator + licence, auto
   `credits.txt`; or **your own clips**, auto-split into scenes and ranked by sharpness, exposure, motion and faces.
 - **Synced lyrics in seconds** for released songs via LRCLIB, or Whisper alignment to your lyric text.
-- **Lyrics**: subtitle (bilingual), karaoke fill, word-by-word, typewriter, kinetic stack, neon, Apple-Music style scrolling.
+- **Lyrics**: subtitle (bilingual), karaoke fill, word-by-word, typewriter, kinetic stack, neon, Apple-Music style
+  scrolling, grunge, paper cut-out, highlighter marker, kinetic stagger (key word huge).
 - **Poster player**: one cover image → lyric video with blurred backdrop, cover card, title/artist, audio visualizer,
   progress bar with time and a scrolling karaoke lyric panel.
 - **Sourcing helpers**: YouTube search, section-only downloads (yt-dlp), contact sheets with timecodes so the agent can
@@ -113,7 +129,8 @@ Open the clone in Claude Code or Codex: `AGENTS.md` / `CLAUDE.md` point the agen
 ```bash
 skills/mv-maker/mv demo all        # Windows: skills\mv-maker\mv.cmd demo all
 ```
-Renders five demos into `projects/demo-*` (story MV, blend & split, lyric poster, lyric styles, pro effects) using
+Renders eight demos into `projects/demo-*` (story MV, blend & split, lyric poster, lyric styles, pro effects, pop MV
+grammar with lip-sync, kinetic lyric styles, a lyric video built from a template) using
 synthetic media only - nothing is downloaded.
 
 Optional free API keys for better stock footage: `PEXELS_API_KEY` ([pexels.com/api](https://www.pexels.com/api/)),
@@ -126,6 +143,10 @@ Talk to the agent, for example:
 > Verse: old footage of someone playing piano. Chorus: singer on top, fans waving lightsticks below, nostalgic.
 
 > Make a lyric video from `poster.jpg` and `song.mp3`, 9:16 and 16:9, karaoke highlight.
+
+> Make a professional pop MV: I have a performance take of the singer (`perf.mp4`) and story clips.
+
+> Make a punk lyric video for `song.mp3` - no footage, grunge style.
 
 The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-maker/SKILL.md):
 
@@ -146,11 +167,14 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 | `mv new projects/x` | project skeleton (`audio/ sources/ lyrics.txt brief.md storyboard.yaml`) |
 | `mv analyze projects/x [--lyrics]` | tempo, beats, sections (+ Whisper word timing) |
 | `mv align projects/x` | your `lyrics.txt` + Whisper timing → `lyrics.yaml` |
-| `mv review projects/x` | `storyboard.yaml` → readable `storyboard.md` |
+| `mv review projects/x` | `storyboard.yaml` → readable `storyboard.md` (+ edit check) |
+| `mv check projects/x [--genre pop]` · `mv genres` | edit check against the genre's cutting grammar · list genres |
+| `mv sync projects/x <id>` | lip-sync offset of a performance clip (audio match) → `picks.yaml` |
+| `mv auto projects/x --template lv-kinetic` | lyric-video storyboard from `lyrics.yaml` + a template |
 | `mv find "query" --project projects/x --slot id` | licence-aware stock/CC search + numbered contact sheet |
 | `mv pick projects/x <id> <slot>:<n>` · `mv ingest projects/x <folder>` | use a candidate · register & rank your own clips |
 | `mv lyrics fetch projects/x --artist A --title T` | synced lyrics from LRCLIB |
-| `mv presets` · `mv credits projects/x` | style presets · attribution list |
+| `mv presets` · `mv credits projects/x` | style presets + lyric templates · attribution list |
 | `mv search "query"` | YouTube candidates |
 | `mv fetch projects/x` | download sources (direct files capped at 300 MB, YouTube sections via yt-dlp) |
 | `mv sheet projects/x <id>` / `mv scenes projects/x <id>` | contact sheet with timecodes / scene cuts |
@@ -160,6 +184,7 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 
 Storyboard reference: [`reference/storyboard-schema.md`](skills/mv-maker/reference/storyboard-schema.md) ·
 techniques: [`reference/techniques.md`](skills/mv-maker/reference/techniques.md) ·
+genres: [`reference/genres.md`](skills/mv-maker/reference/genres.md) ·
 lyrics: [`reference/lyrics.md`](skills/mv-maker/reference/lyrics.md)
 
 ## Repository layout

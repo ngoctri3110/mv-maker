@@ -5,21 +5,26 @@ Run through the launcher next to SKILL.md: `mv` (macOS/Linux/Git-Bash) or `mv.cm
 
 Subcommands:
   doctor   [--quick] [--install ids] machine check + benchmark -> machine.json + install recommendations
-  demo     [story|blur|lyric-poster|lyric-styles|all]   build + render a demo with synthetic media
+  demo     [story|blur|lyric-poster|lyric-styles|pro|genre-mv|lyric-kinetic|lyric-template|all]
+                                     build + render a demo with synthetic media
   new      <project>                 create a project skeleton
   analyze  <project> [--lyrics]      tempo / beats / sections (+ whisper lyric timing)
   align    <project>                 lyrics.txt + Whisper timing -> lyrics.yaml (per-word times)
   fonts    [pack|list|get|check|preview]  font pack, catalogue (--lang/--tag), download "Family:900i",
                                      glyph coverage, specimen of candidates over the poster
   palette  <image>                   dominant colours (accent / text colour picks)
-  review   <project>                 storyboard.yaml -> storyboard.md (for human approval)
+  review   <project>                 storyboard.yaml -> storyboard.md (for human approval, incl. edit check)
+  check    <project> [--genre g]     edit check against the genre's cutting grammar (reference/genres.yaml)
+  genres                             list genres (cutting grammar + fitting presets)
+  sync     <project> <source_id>     find a performance clip's offset to the song (audio match) -> picks.yaml
+  auto     <project> --template t    build a lyric-video storyboard from lyrics.yaml + a template preset
   search   "query" [-n 10]           list YouTube candidates (id | title | duration | url)
   find     "query" --project p --slot id [--type video|image] [--providers pexels,pixabay,commons,openverse,youtube]
                                      licence-aware search + numbered contact sheet refs/cand_<slot>.jpg
   pick     <project> <source_id> <slot:n>   use candidate n for a source (written to picks.yaml)
   ingest   <project> <folder>        register your own clips/photos, rank best moments (refs/ingest_best.jpg)
   lyrics   fetch <project> --artist A --title T   synced lyrics from LRCLIB -> lyrics.yaml
-  presets                            list style presets (storyboard: preset: <name>)
+  presets                            list style presets + lyric-video templates (storyboard: preset: <name>)
   credits  <project>                 out/credits.txt for the video description
   fetch    <project>                 download every source that has a url (direct or yt-dlp)
   sheet    <project> <source_id>     contact sheet with timecodes, to pick in-points
@@ -53,6 +58,8 @@ import doctor as DR  # noqa: E402
 import fonts as FT  # noqa: E402
 import sources as SRC  # noqa: E402
 import runtime as RT  # noqa: E402
+import gen as GEN  # noqa: E402
+import editcheck as EC  # noqa: E402
 
 RT.apply_runtime_env()  # FFmpeg chosen with `mv doctor --use-ffmpeg` (this process only)
 
@@ -135,32 +142,52 @@ def load_presets() -> dict:
     return yaml.safe_load((Path(__file__).resolve().parent.parent / "reference" / "presets.yaml").read_text(encoding="utf-8"))
 
 
-def apply_preset(sb: dict, shots: list) -> None:
+def apply_preset(sb: dict, shots: list) -> dict:
+    """Merge a style preset / lyric-video template into the storyboard (explicit values win).
+    Returns generated scene sources for shots without layers (lyric-video templates)."""
     presets = load_presets()
     pr = presets.get(sb["preset"])
     if not pr:
         die(f"unknown preset '{sb['preset']}' - one of {sorted(presets)}")
+    themes = pr.get("themes") or {}
+    if sb.get("theme"):
+        if sb["theme"] not in themes:
+            die(f"preset '{sb['preset']}' has no theme '{sb['theme']}' - one of {sorted(themes) or 'none'}")
+        for k, v in themes[sb["theme"]].items():
+            sb.setdefault(k, v)
+    if pr.get("palette"):
+        sb.setdefault("palette", list(pr["palette"]))
     for k, v in (pr.get("defaults") or {}).items():
         if k == "typo":
             sb["typo"] = {**v, **(sb.get("typo") or {})}
         else:
             sb.setdefault(k, v)
     base = pr.get("shot") or {}
-    for sh in shots:
+    scenes = pr.get("scenes") or []
+    gen_sources: dict = {}
+    for n, sh in enumerate(shots):
         if sh.get("preset") is False:
             continue
-        extra = {}
         sec = str(sh.get("section", "")).lower()
-        for key, val in (pr.get("sections") or {}).items():
-            if key in sec:
-                extra = val
+        secs = pr.get("sections") or {}
+        ck = EC.canon(sec)  # "pre-chorus" -> pre, "hook" -> chorus (exact canonical match beats a substring)
+        if ck:
+            extra = secs.get(ck) or {}
+        else:
+            extra = next((v for k, v in secs.items() if k in sec), {}) if sec else {}
         sh["fx"] = list(base.get("fx") or []) + list(extra.get("fx") or []) + list(sh.get("fx") or [])
         for k in ("transition",):
             if k not in sh and (extra.get(k) or base.get(k)):
                 sh[k] = extra.get(k) or base.get(k)
-        for k in ("beat_fx", "beat_every", "lyric_style"):
+        for k in ("beat_fx", "beat_every", "beat_flash", "beat_zoom", "lyric_style"):
             if k not in sh and k in extra:
                 sh[k] = extra[k]
+        if scenes and not sh.get("layers"):  # template: generated background, cycling for scene variety
+            k = (int(extra["scene"]) - 1 if "scene" in extra else n) % len(scenes)
+            sid = f"_scene{k + 1}"
+            gen_sources[sid] = {"gen": scenes[k], "note": f"template scene {k + 1}"}
+            sh["layers"] = [{"src": sid, **(pr.get("scene_layer") or {})}]
+    return gen_sources
 
 
 # --------------------------------------------------------------------------- project
@@ -180,11 +207,48 @@ class Project:
         if not self.shots:
             die("storyboard has no shots")
         if self.sb.get("preset"):
-            apply_preset(self.sb, self.shots)
+            for sid, info in apply_preset(self.sb, self.shots).items():
+                self.sources.setdefault(sid, info)
+        self._resolve_lipsync()
         self.build = self.root / "build"
         self.out = self.root / "out"
         an = self.root / "analysis.json"
-        self.beats: list[float] = json.loads(an.read_text(encoding="utf-8")).get("beats", []) if an.exists() else []
+        data = json.loads(an.read_text(encoding="utf-8")) if an.exists() else {}
+        self.beats: list[float] = data.get("beats", [])
+        self.downbeats: list[float] = data.get("downbeats_guess", [])
+
+    def gen_spec(self, sid) -> str | None:
+        return (self.sources.get(sid) or {}).get("gen") if sid else None
+
+    def _resolve_lipsync(self):
+        """lipsync: true -> in = song time + the source's `sync` offset (from `mv sync`); lipsync: <s> = that offset.
+        A performance clip shot to playback then stays in sync across every cut (multi-cam style)."""
+        song0 = tsec(self.sb.get("song_start", 0))
+        for sh in self.shots:
+            for ly in sh.get("layers") or []:
+                ls = ly.get("lipsync")
+                if ls is None or ls is False:
+                    continue
+                off = float((self.sources.get(ly.get("src")) or {}).get("sync", 0) or 0) if ls is True else float(ls)
+                ly["in"] = round(tsec(sh.get("start")) + song0 + off, 3)
+
+    def apply_cut_lead(self, fps: int) -> float:
+        """cut_lead: cut picture a frame or two BEFORE the beat (`2f` or seconds) - the eye needs ~1-2 frames to
+        register a cut, so early cuts feel exactly on the beat. Audio and lyric timing are unchanged."""
+        v = self.sb.get("cut_lead")
+        if not v:
+            return 0.0
+        txt = str(v).strip()
+        lead = float(txt[:-1]) / fps if txt.endswith("f") else float(txt)
+        if not 0 < lead <= 0.2:
+            die("cut_lead must be between 0 and 0.2 s (e.g. 2f or 0.06)")
+        for i, sh in enumerate(self.shots):
+            if i > 0:
+                sh["start"] = tsec(sh["start"]) - lead
+            if i < len(self.shots) - 1:
+                sh["end"] = tsec(sh["end"]) - lead
+        self._resolve_lipsync()
+        return lead
 
     def lyric_lines(self) -> list[dict]:
         lf = self.sb.get("lyrics_file")
@@ -221,6 +285,12 @@ class Project:
         return 0.0
 
     def validate(self):
+        for sid, info in self.sources.items():
+            if (info or {}).get("gen"):
+                try:
+                    GEN.parse(info["gen"], self.sb.get("palette"), self.sb.get("accent"))
+                except ValueError as e:
+                    die(f"source {sid}: {e}")
         prev_end = None
         ids = set()
         for i, sh in enumerate(self.shots):
@@ -241,6 +311,13 @@ class Project:
                 mode = ly.get("blend")
                 if mode and mode not in BLEND_MODES:
                     die(f"{sid}: blend '{mode}' not in {sorted(BLEND_MODES)}")
+                if ly.get("lipsync") not in (None, False) and (
+                        float(ly.get("speed", 1)) != 1 or ly.get("ramp") or ly.get("freeze")):
+                    die(f"{sid}: a lipsync layer must play at speed 1 (no speed / ramp / freeze)")
+            if sh.get("role") and sh["role"] not in EC.ROLES:
+                die(f"{sid}: role must be one of {sorted(EC.ROLES)}")
+            if sh.get("size") and sh["size"] not in EC.SIZES:
+                die(f"{sid}: size must be one of {sorted(EC.SIZES)}")
             if sh.get("layout", "full") not in LAYOUTS:
                 die(f"{sid}: layout must be one of {sorted(LAYOUTS)}")
             bad = set(sh.get("beat_fx") or []) - BEAT_FX
@@ -490,6 +567,19 @@ class Renderer:
         die("no usable .ttf font found; set font_file: in storyboard.yaml")
 
     # ---- one layer -> (input args, filter chain ending in [label])
+    def add_layer(self, args: list, graph: list, shot_id: str, idx: int, ly: dict, w: int, h: int, need: float,
+                  contain: bool = False) -> str:
+        """Append one layer's inputs + filter statements; returns its output label."""
+        a, chain, lab, pre = self.layer(shot_id, idx, ly, w, h, need, contain)
+        n_in = args.count("-i")
+        args += a
+        head = f"[{n_in}:v]"
+        if pre:  # generated background: multi-statement graph with [INk] = its k-th input
+            graph += [re.sub(r"\[IN(\d+)\]", lambda m: f"[{n_in + int(m.group(1))}:v]", st) for st in pre]
+            head = f"[{lab}g]"
+        graph.append(head + ",".join(chain) + f"[{lab}]")
+        return lab
+
     def layer(self, shot_id: str, idx: int, ly: dict, w: int, h: int, need: float,
               contain: bool = False, extra_fx: list | None = None):
         sid = ly.get("src")
@@ -497,7 +587,16 @@ class Renderer:
         lab = f"{shot_id}l{idx}".replace("-", "_")
         speed = float(ly.get("speed", 1.0))
         chain: list[str] = []
-        if f is not None and f.suffix.lower() in IMAGE_EXT:
+        spec = self.p.gen_spec(sid)
+        pre: list[str] = []
+        if spec:
+            f = None
+            try:
+                args, pre = GEN.build(spec, w, h, self.fps, need, self.dir / "gen", f"{lab}g",
+                                      self.p.sb.get("palette"), self.p.sb.get("accent"))
+            except (ValueError, RuntimeError) as e:
+                die(f"{shot_id}: source {sid}: {e}")
+        elif f is not None and f.suffix.lower() in IMAGE_EXT:
             args = ["-loop", "1", "-framerate", str(self.fps), "-t", f"{need:.3f}", "-i", str(f)]
         elif f is not None:
             start = max(0.0, tsec(ly.get("in", 0)) - self.p.source_offset(sid))
@@ -526,6 +625,8 @@ class Renderer:
                             f"fontsize={fs}:line_spacing={fs // 3}:x=(w-text_w)/2:y=(h-text_h)/2:"
                             f"box=1:boxcolor=black@0.45:boxborderw={fs // 2}")
         fit = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos" if contain else cover(w, h, ly.get("focus"))
+        if spec:
+            fit = f"scale={w}:{h}"
         if f is not None and ly.get("smooth") and (speed < 1 or ly.get("ramp")):
             # optical-flow frame interpolation for silky slow motion (CPU heavy; scale first to keep it bearable)
             chain += [fit, f"minterpolate=fps={self.fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1", f"fps={self.fps}"]
@@ -544,11 +645,11 @@ class Renderer:
             chain += [f"scale={2 * w}:{2 * h}",
                       f"zoompan=z='{zexpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={w}x{h}:fps={self.fps}"]
         chain += fx_filters(list(ly.get("fx") or []) + list(extra_fx or []), lab, w, h, self.fps)
-        if f is None:
+        if f is None and not spec:
             chain.append(label_filter)  # after zoom/fx so the card text stays readable
         chain += [f"tpad=stop_mode=clone:stop_duration={need:.3f}", f"trim=duration={need:.3f}",
                   "setpts=PTS-STARTPTS", "setsar=1", "format=gbrp"]
-        return args, chain, lab
+        return args, chain, lab, pre
 
     def beat_filters(self, sh: dict, s: float, e: float, need: float) -> list[str]:
         """Beat-synced punch: zoom pulse, camera shake, brightness flash (beats from analysis.json)."""
@@ -584,8 +685,8 @@ class Renderer:
             f = self.p.source_file(ly.get("src")) if ly.get("src") else None
             files.append([str(f), f.stat().st_mtime if f else 0])
         beats = self.p.beats if sh.get("beat_fx") else []
-        blob = json.dumps([sh, prev_tr, files, self.W, self.H, self.fps, self.mode,
-                           self.p.sources, beats, ENGINE_HASH], sort_keys=True, default=str)
+        blob = json.dumps([sh, prev_tr, files, self.W, self.H, self.fps, self.mode, self.p.sources, beats,
+                           self.p.sb.get("palette"), self.p.sb.get("accent"), ENGINE_HASH], sort_keys=True, default=str)
         return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
     def render_shot(self, i: int) -> Path:
@@ -615,11 +716,7 @@ class Renderer:
         graph: list[str] = []
         labels = []
         for k, ly in enumerate(base):
-            a, chain, lab = self.layer(sid, k, ly, *slots[k], need)
-            n_in = args.count("-i")
-            args += a
-            graph.append(f"[{n_in}:v]" + ",".join(chain) + f"[{lab}]")
-            labels.append(lab)
+            labels.append(self.add_layer(args, graph, sid, k, ly, *slots[k], need))
 
         vert = layout == "split_v"
         hf = feather_half(sh, H if vert else W) if layout in ("split_v", "split_h") else 0
@@ -633,10 +730,7 @@ class Renderer:
             k = min(bw / pw, bh / ph)
             cw, ch = even(pw * k), even(ph * k)
             px, py = bx + (bw - cw) // 2, by + (bh - ch) // 2
-            a, chain, lab = self.layer(sid, 9, base[0], cw, ch, need)
-            n_in = args.count("-i")
-            args += a
-            graph.append(f"[{n_in}:v]" + ",".join(chain) + f"[{lab}]")
+            lab = self.add_layer(args, graph, sid, 9, base[0], cw, ch, need)
             off, sg = max(4, W // 90), max(8, W // 40)
             bg = f"{labels[0]}bg"
             graph.append(f"[{labels[0]}]scale={even(W / 8)}:{even(H / 8)},gblur=sigma=5,scale={W}:{H},format=yuv444p,"
@@ -646,10 +740,7 @@ class Renderer:
             graph.append(f"[{bg}][{lab}]overlay=x={px}:y={py}:format=gbrp:shortest=1[stk]")
             cur = "stk"
         elif layout == "fit_blur":  # whole source frame centred, its own blurred copy fills the rest
-            a, chain, lab = self.layer(sid, 9, base[0], W, H, need, contain=True)
-            n_in = args.count("-i")
-            args += a
-            graph.append(f"[{n_in}:v]" + ",".join(chain) + f"[{lab}]")
+            lab = self.add_layer(args, graph, sid, 9, base[0], W, H, need, contain=True)
             bg = f"{labels[0]}bg"
             graph.append(f"[{labels[0]}]scale={even(W / 6)}:{even(H / 6)},gblur=sigma=6,scale={W}:{H},"
                          f"eq=brightness=-0.08:saturation=1.1,format=gbrp[{bg}]")
@@ -691,10 +782,7 @@ class Renderer:
             cur = "stk"
 
         for k, ly in enumerate(over):
-            a, chain, lab = self.layer(sid, 10 + k, ly, W, H, need)
-            n_in = args.count("-i")
-            args += a
-            graph.append(f"[{n_in}:v]" + ",".join(chain) + f"[{lab}]")
+            lab = self.add_layer(args, graph, sid, 10 + k, ly, W, H, need)
             mode = ly.get("blend", "normal")
             op = float(ly.get("opacity", 0.4))
             graph.append(f"[{cur}][{lab}]blend=all_mode={mode}:all_opacity={op}[ov{k}]")
@@ -783,7 +871,17 @@ class Renderer:
         elif geom:
             area = geom["lyr"]
         aw.lyrics(self.p.lyric_lines(), style_for, area, geom["align"] if geom else None,
-                  sb.get("lyric_highlight", "line"), sb.get("lyric_anim", default_anim))
+                  sb.get("lyric_highlight", "line"), sb.get("lyric_anim", default_anim),
+                  lead=float(sb.get("lyric_lead", 0.15)))
+        tc = sb.get("title_card")
+        if tc:
+            a0 = tsec(tc.get("start", s0 + 0.8))
+            aw.title_card(tc, a0, a0 + float(tc.get("dur", 4)))
+        ec = sb.get("end_card")
+        if ec:
+            d = float(ec.get("dur", 3))
+            a0 = tsec(ec["start"]) if "start" in ec else t_end - d - 0.2
+            aw.title_card(ec, a0, a0 + d, kind="end")
 
         pc = sb.get("poster") or {}
         if geom:
@@ -805,14 +903,25 @@ class Renderer:
         """Visualizer + progress bar + time labels for poster lyric videos. Returns (video label, audio label)."""
         geom = self.poster_geom()
         pc = self.p.sb.get("poster") or {}
-        if not geom:
+        vz = self.p.sb.get("visualizer")
+        if not geom and not vz:
             return cur, None
         acc = LY.ff_color(self.p.sb.get("accent", "#FFD24D"))
-        vcol = LY.ff_color(pc.get("visualizer_color", "#FFFFFF"))
         alabel = None
-        vis = pc.get("visualizer", "wave")
-        if vis != "none" and n_audio is not None:
+        op = 1.0
+        if geom:
+            vcol = LY.ff_color(pc.get("visualizer_color", "#FFFFFF"))
+            vis = pc.get("visualizer", "wave")
             vx, vy, vw, vh = geom["vis"]
+        else:  # top-level `visualizer:` - audio spectrum / wave on any video (lyric videos, "linear spectrum")
+            vz = vz if isinstance(vz, dict) else {"type": str(vz)}
+            vis = vz.get("type", "bars")
+            vcol = LY.ff_color(vz.get("color", self.p.sb.get("accent", "#FFFFFF")))
+            op = float(vz.get("opacity", 0.85))
+            W, H = self.W, self.H
+            fx0, fy0, fx1, fy1 = vz.get("area") or ([0.08, 0.80, 0.92, 0.855] if H > W else [0.06, 0.86, 0.94, 0.95])
+            vx, vy, vw, vh = int(W * fx0), int(H * fy0), even(W * (fx1 - fx0)), even(H * (fy1 - fy0))
+        if vis != "none" and n_audio is not None:
             graph.append(f"[{n_audio}:a]asplit=2[amain][avis]")
             if vis == "bars":
                 graph.append(f"[avis]showfreqs=s={vw}x{vh}:mode=bar:ascale=sqrt:fscale=log:colors={vcol}:"
@@ -820,9 +929,11 @@ class Renderer:
             else:
                 graph.append(f"[avis]showwaves=s={vw}x{vh}:mode=cline:rate={self.fps}:colors={vcol}:"
                              f"scale=sqrt,format=rgba[wv]")
+            if op < 1:
+                graph[-1] = graph[-1].replace("[wv]", f",colorchannelmixer=aa={op}[wv]")
             graph.append(f"[{cur}][wv]overlay=x={vx}:y={vy}:eof_action=pass[pv1]")
             cur, alabel = "pv1", "amain"
-        if pc.get("progress", True):
+        if geom and pc.get("progress", True):
             bx, by, bw, bh = geom["bar"]
             graph.append(f"color=c=0x5a5a5a:s={bw}x{bh}:r={self.fps}:d={total:.3f}[trk]")
             graph.append(f"color=c={acc}:s={bw}x{bh}:r={self.fps}:d={total:.3f}[fil]")
@@ -1031,9 +1142,14 @@ def whisper_words(audio: Path, model: str, lang: str):
 
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
-DEMOS = ["story", "blur", "lyric-poster", "lyric-styles", "pro"]
+DEMOS = ["story", "blur", "lyric-poster", "lyric-styles", "pro", "genre-mv", "lyric-kinetic", "lyric-template"]
 DEMO_ASSETS = {"singer_live": "bars", "A": "bars", "fans_light": "fractal", "B": "fractal",
-               "memory_overlay": "photo", "C": "photo", "poster": "poster"}
+               "memory_overlay": "photo", "C": "photo", "poster": "poster", "perf": "perf", "story": "fractal",
+               "detail": "photo"}
+# drum pulse + bass + a melody that never repeats inside 24 s (so `mv sync` has something unique to match)
+DEMO_SONG = ("aevalsrc='0.55*sin(2*PI*220*t)*exp(-10*mod(t,0.5))+0.25*sin(2*PI*330*t)*exp(-6*mod(t+0.25,1))"
+             "+0.2*sin(2*PI*t*440*pow(2,(mod(3*floor(t*2)*floor(t*2)+5*floor(t*2),13)-6)/12))*exp(-4*mod(t,0.5))'"
+             ":s=44100:d=24")
 
 
 def make_demo_asset(kind: str, dst: Path, title: str = "MÙA HÈ\nCỦA EM"):
@@ -1042,6 +1158,11 @@ def make_demo_asset(kind: str, dst: Path, title: str = "MÙA HÈ\nCỦA EM"):
         run(ff + ["-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=30:d=60", "-c:v", "libx264", "-preset", "ultrafast", str(dst)])
     elif kind == "fractal":
         run(ff + ["-f", "lavfi", "-i", "mandelbrot=s=1280x720:r=30", "-t", "40", "-c:v", "libx264", "-preset", "ultrafast", str(dst)])
+    elif kind == "perf":  # performance camera: its own audio is the song played back 1.5 s after it started
+        song = dst.parent.parent / "audio" / "song.mp3"
+        run(ff + ["-f", "lavfi", "-i", "testsrc2=s=1280x720:r=30:d=40", "-i", str(song), "-filter_complex",
+                  "[1:a]adelay=1500|1500,apad[a]", "-map", "0:v", "-map", "[a]", "-t", "40",
+                  "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", str(dst)])
     elif kind == "photo":
         run(ff + ["-f", "lavfi", "-i", "smptehdbars=s=1280x720:d=1", "-frames:v", "1", str(dst)])
     elif kind == "poster":
@@ -1076,18 +1197,25 @@ def cmd_demo(a):
             else:
                 for f in ex.iterdir():
                     shutil.copy(f, root / f.name)
-            run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
-                 "aevalsrc='0.55*sin(2*PI*220*t)*exp(-10*mod(t,0.5))+0.25*sin(2*PI*330*t)*exp(-6*mod(t+0.25,1))'"
-                 ":s=44100:d=24", str(root / "audio" / "song.mp3")])
+            run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", DEMO_SONG,
+                 str(root / "audio" / "song.mp3")])
+            if name == "lyric-template":  # the one-step lyric video: analyze -> auto (template) -> render
+                cmd_analyze(argparse.Namespace(project=str(root), audio=str(root / "audio" / "song.mp3"), lyrics=False,
+                                               model="medium", language="vi", sections=None))
+                cmd_auto(argparse.Namespace(project=str(root), template="lv-kinetic", theme=None, format="9:16",
+                                            audio=None, title="Mùa Hè Của Em", artist="Demo Artist", lang="en",
+                                            lines=2, force=True))
             sb = yaml.safe_load((root / "storyboard.yaml").read_text(encoding="utf-8"))
             for sid in sb.get("sources") or {}:
                 kind = DEMO_ASSETS.get(sid)
                 if kind:
                     ext = ".png" if kind in ("photo", "poster") else ".mp4"
                     make_demo_asset(kind, root / "sources" / f"{sid}{ext}")
-            if any(sh.get("beat_fx") for sh in sb.get("shots") or []):
+            if name != "lyric-template" and (sb.get("genre") or any(sh.get("beat_fx") for sh in sb.get("shots") or [])):
                 cmd_analyze(argparse.Namespace(project=str(root), audio=None, lyrics=False, model="medium",
                                                language="vi", sections=None))
+            if "perf" in (sb.get("sources") or {}):
+                cmd_sync(argparse.Namespace(project=str(root), source="perf"))
         cmd_review(argparse.Namespace(project=str(root)))
         cmd_render(argparse.Namespace(project=str(root), mode=a.mode, encoder=a.encoder, jobs=None, force=False))
 
@@ -1251,7 +1379,8 @@ REVIEW_LABELS = {
                src_head="| id | Status | Source | Note / rights |", have="✅ file ready", wait="⬇ to download",
                need="❓ to find", shots_head="| # | Time | Lyric / section | Intent | Technique | Layout | Layers | FX | → Transition |",
                soft="soft seam", hard="hard cut", alts="Alternatives per shot (pick to swap)",
-               approve="> Approve: reply OK, or give shot id + option to change (e.g. `S03 -> option 2`)."),
+               approve="> Approve: reply OK, or give shot id + option to change (e.g. `S03 -> option 2`).",
+               check="Edit check (genre cutting grammar)", genre="Genre", preset="Style"),
     "vi": dict(format="Khung hình", duration="Thời lượng", avg="trung bình", lyric="Lyric", style="kiểu", accent="màu nhấn",
                lines="câu", reading="Đọc bài hát", look="Look tổng thể", plan="Đề xuất kỹ thuật theo ý nghĩa bài hát",
                meaning="Ý nghĩa / cảm xúc", rec="⭐ Đề xuất", why="Vì sao hợp", other="Phương án khác",
@@ -1259,7 +1388,8 @@ REVIEW_LABELS = {
                src_head="| id | Trạng thái | Nguồn | Ghi chú / quyền sử dụng |", have="✅ có file", wait="⬇ chờ tải",
                need="❓ cần tìm", shots_head="| # | Thời gian | Lời / đoạn | Ý đồ | Kỹ thuật | Bố cục | Lớp hình | FX | → Chuyển |",
                soft="viền mềm", hard="cắt cứng", alts="Phương án thay thế từng shot (chọn để đổi)",
-               approve="> Duyệt: trả lời OK, hoặc ghi số shot + phương án muốn đổi (vd. `S03 -> phương án 2`)."),
+               approve="> Duyệt: trả lời OK, hoặc ghi số shot + phương án muốn đổi (vd. `S03 -> phương án 2`).",
+               check="Kiểm tra nhịp dựng (theo thể loại)", genre="Thể loại", preset="Phong cách"),
 }
 
 
@@ -1273,6 +1403,10 @@ def cmd_review(a):
          f"- {T['format']}: **{sb.get('format', '9:16')}** · {sb.get('fps', 30)} fps · Audio: `{sb.get('audio')}`",
          f"- {T['duration']}: **{fmt_t(e1 - s0)}** ({fmt_t(s0)} → {fmt_t(e1)}) · {len(p.shots)} shots · "
          f"{T['avg']} {(e1 - s0) / len(p.shots):.1f}s/shot", ""]
+    if sb.get("genre") or sb.get("preset"):
+        L[-1:] = [f"- {T['genre']}: **{sb.get('genre', '-')}** · {T['preset']}: **{sb.get('preset', '-')}**"
+                  + (f" ({sb['theme']})" if sb.get("theme") else "")
+                  + (f" · cut_lead {sb['cut_lead']}" if sb.get("cut_lead") else ""), ""]
     lines = p.lyric_lines()
     if lines or sb.get("lyric_style"):
         L += [f"- {T['lyric']}: {T['style']} **{sb.get('lyric_style', 'subtitle')}** · font `{sb.get('font', 'Be Vietnam Pro')}` / "
@@ -1321,6 +1455,10 @@ def cmd_review(a):
                 t += f" zoom-{ly['zoom']}"
             if ly.get("fx"):
                 t += " " + "+".join(map(str, ly["fx"]))
+            if ly.get("lipsync") not in (None, False):
+                t += " lipsync"
+            if p.gen_spec(ly.get("src")):
+                t += f" gen:{p.gen_spec(ly.get('src'))}"
             lay.append(t)
         lyric = sh.get("lyric") or sh.get("caption") or sh.get("section", "")
         layout = sh.get("layout", "full")
@@ -1331,11 +1469,16 @@ def cmd_review(a):
         tech = ", ".join(f"`{t}`" for t in sh.get("technique") or [])
         if sh.get("lyric_style"):
             tech += f"<br>lyric: {sh['lyric_style']}"
+        if sh.get("role") or sh.get("size"):
+            tech += f"<br>{sh.get('role', '')} {sh.get('size', '')}".rstrip()
         L.append(f"| {sh['id']} | {fmt_t(tsec(sh['start']))}–{fmt_t(tsec(sh['end']))} | {lyric} | {sh.get('intent', '')} | "
                  f"{tech} | {layout} | {'<br>'.join(lay)} | {'+'.join(fx)} | {sh.get('transition', 'cut')} |")
     alts = [(sh["id"], a) for sh in p.shots for a in sh.get("alt") or []]
     if alts:
         L += ["", f"## {T['alts']}", ""] + [f"- **{i}:** {a}" for i, a in alts]
+    if sb.get("genre") or any(sh.get("role") or sh.get("size") for sh in p.shots):
+        res = EC.check(sb, p.shots, p.beats, p.downbeats, sb.get("lang", "en"))
+        L += ["", f"## {T['check']}", ""] + EC.report_md(res)
     L += ["", T["approve"]]
     out = p.root / "storyboard.md"
     out.write_text("\n".join(L) + "\n", encoding="utf-8")
@@ -1447,6 +1590,187 @@ def cmd_ingest(a):
             if "sharpness" in m else "photo"
         print(f"  {i:2d}. {m['src']:<8} in: {m['in']:<6} score {m['score']:.2f}  {extra}  ({m['file']})")
     print(f"[mv] {len(files)} files registered in picks.yaml as {a.prefix}1..{a.prefix}{len(files)} · best moments: {sheet}")
+
+
+def cmd_check(a):
+    p = Project(a.project)
+    p.validate()
+    if a.genre:
+        p.sb["genre"] = a.genre
+    res = EC.check(p.sb, p.shots, p.beats, p.downbeats, p.sb.get("lang", "en"))
+    if not p.beats:
+        print("[mv] (no analysis.json - beat checks skipped; run: mv analyze <project>)")
+    print("\n".join(EC.report_md(res)))
+
+
+def cmd_genres(a):
+    for k, g in EC.load_genres().items():
+        asl = g.get("asl") or {}
+        print(f"  {k:<8} {g.get('name', '')}")
+        print(f"           verse {asl.get('verse')}s · chorus {asl.get('chorus')}s · min {g.get('min_shot')}s · "
+              f"cut on {g.get('cut_on')} · presets: {', '.join(g.get('presets') or [])}")
+
+
+def _pcm(f: Path, sr: int = 8000):
+    import numpy as np
+    r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(f), "-vn", "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"],
+                       capture_output=True)
+    if r.returncode != 0 or not r.stdout:
+        die(f"no audio track in {f.name} (lip-sync matching needs the clip's own sound)")
+    return np.frombuffer(r.stdout, dtype=np.float32)
+
+
+def _flux(x, hop: int = 80, n: int = 512, bands: int = 24):
+    """Band-wise spectral flux at 100 frames/s (8 kHz input), z-scored per band."""
+    import numpy as np
+    frames = max(0, (len(x) - n) // hop)
+    if frames < 50:
+        die("audio too short to match (needs > 0.5 s)")
+    out = []
+    win = np.hanning(n).astype(np.float32)
+    edges = np.unique(np.geomspace(2, n // 2, bands + 1).astype(int))
+    for c in range(0, frames, 4000):  # chunked to keep memory small on long songs
+        idx = np.arange(n)[None, :] + hop * np.arange(c, min(frames, c + 4000))[:, None]
+        spec = np.abs(np.fft.rfft(x[idx] * win, axis=1))
+        out.append(np.stack([spec[:, e0:e1].sum(1) for e0, e1 in zip(edges, edges[1:])], 1))
+    lb = np.log1p(np.concatenate(out) * 10)
+    fl = np.maximum(0, np.diff(lb, axis=0))
+    return (fl - fl.mean(0)) / (fl.std(0) + 1e-6)
+
+
+def audio_offset(song: Path, clip: Path) -> tuple[float, float]:
+    """Offset (s) such that clip_time = song_time + offset, and a confidence ratio (best / runner-up peak)."""
+    import numpy as np
+    a, b = _flux(_pcm(song)), _flux(_pcm(clip))
+    N = 1 << (len(a) + len(b)).bit_length()
+    corr = np.fft.irfft((np.conj(np.fft.rfft(a, N, axis=0)) * np.fft.rfft(b, N, axis=0)).sum(1), N)
+    lags = np.arange(N)
+    lags[lags > N // 2] -= N
+    ov = np.minimum(len(a), len(b) - lags) - np.maximum(0, -lags)
+    need = min(500, int(0.5 * min(len(a), len(b))))
+    score = np.where(ov >= need, corr / np.sqrt(np.maximum(ov, 1)), -np.inf)
+    best = int(np.argmax(score))
+    far = np.abs(lags - lags[best]) > 30
+    second = float(np.max(np.where(far, score, -np.inf)))
+    conf = float(score[best] / second) if second > 0 else 9.9
+    frac = 0.0
+    if 0 < best < N - 1 and np.isfinite(score[best - 1]) and np.isfinite(score[best + 1]):
+        y0, y1, y2 = score[best - 1], score[best], score[best + 1]
+        den = y0 - 2 * y1 + y2
+        frac = float(0.5 * (y0 - y2) / den) if den else 0.0
+    return float((lags[best] + frac) / 100.0), conf
+
+
+def cmd_sync(a):
+    p = Project(a.project)
+    f = p.source_file(a.source)
+    if f is None or f.suffix.lower() in IMAGE_EXT:
+        die(f"source {a.source} has no video file yet (mv fetch / mv ingest first)")
+    audio = p.root / str(p.sb.get("audio") or "")
+    if not audio.is_file():
+        die(f"song audio not found: {audio}")
+    off, conf = audio_offset(audio, f)
+    print(f"[mv] {a.source}: clip time = song time {'+' if off >= 0 else '-'} {abs(off):.2f} s  (confidence {conf:.2f})")
+    if conf < 1.1:
+        print("[mv] WARN: weak match - is this clip really shot to this song's playback? Check by eye in a proxy render.")
+    picks = p.root / "picks.yaml"
+    cur = (yaml.safe_load(picks.read_text(encoding="utf-8")) or {}) if picks.exists() else {}
+    cur[a.source] = {**(cur.get(a.source) or {}), "sync": round(off, 3)}
+    picks.write_text("# written by mv pick / mv ingest / mv sync - merged over storyboard sources\n" +
+                     yaml.safe_dump(cur, allow_unicode=True, sort_keys=False, width=200), encoding="utf-8")
+    print(f"[mv] wrote sync: {off:.3f} to {picks}  - use layers like {{src: {a.source}, lipsync: true}}")
+
+
+def _duration(f: Path) -> float:
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(f)],
+                       capture_output=True, text=True)
+    try:
+        return float(r.stdout.strip())
+    except ValueError:
+        die(f"cannot read duration of {f}")
+
+
+def cmd_auto(a):
+    """Lyric video in one step: lyrics.yaml + audio + a template preset -> storyboard.yaml (scenes change with the song)."""
+    root = Path(a.project)
+    sbp = root / "storyboard.yaml"
+    if sbp.exists() and not a.force:
+        die(f"{sbp} exists - pass --force to replace it (copy it first if you edited it)")
+    presets = load_presets()
+    pr = presets.get(a.template)
+    if not pr:
+        die(f"unknown template '{a.template}' - lyric templates: "
+            + ", ".join(k for k, v in presets.items() if v.get("kind") == "lyric-template"))
+    if pr.get("kind") != "lyric-template":
+        print(f"[mv] note: '{a.template}' is a footage style preset - shots get placeholder cards until you add sources")
+    audio = Path(a.audio) if a.audio else next((f for f in sorted((root / "audio").glob("*"))
+                                                if f.suffix.lower() in (".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac")), None)
+    if not audio or not audio.exists():
+        die(f"no audio in {root / 'audio'} (or pass --audio)")
+    lf = root / "lyrics.yaml"
+    if not lf.exists():
+        die(f"{lf} not found - run mv align / mv lyrics fetch first")
+    lines = sorted((yaml.safe_load(lf.read_text(encoding="utf-8")) or {}).get("lines", []), key=lambda l: float(l["start"]))
+    if not lines:
+        die("lyrics.yaml has no lines")
+    dur = _duration(audio)
+    an = root / "analysis.json"
+    data = json.loads(an.read_text(encoding="utf-8")) if an.exists() else {}
+    beats, secs = data.get("beats") or [], data.get("sections") or []
+
+    def snap(t):
+        if not beats:
+            return round(t, 3)
+        b = min(beats, key=lambda x: abs(x - t))
+        return round(b if abs(b - t) < 0.45 else t, 3)
+
+    def label(ln):
+        if ln.get("section"):
+            return str(ln["section"]).lower()
+        mid = (float(ln["start"]) + float(ln["end"])) / 2
+        for x in secs:
+            if x["start"] <= mid < x["end"]:
+                return "chorus" if x.get("energy_rel", 0) > 0.8 else "verse"
+        return "verse"
+
+    groups: list[list[dict]] = []
+    for ln in lines:
+        if not groups or label(ln) != label(groups[-1][0]) or len(groups[-1]) >= a.lines:
+            groups.append([ln])
+        else:
+            groups[-1].append(ln)
+    first = float(lines[0]["start"])
+    cuts, names = [0.0], []
+    if first > 3.0:
+        cuts.append(snap(first - 0.4))
+        names.append("intro")
+    for g, nxt in zip(groups, groups[1:] + [None]):
+        names.append(label(g[0]))
+        if nxt is not None:
+            t = snap((float(g[-1]["end"]) + float(nxt[0]["start"])) / 2)
+            if t - cuts[-1] >= 1.0:
+                cuts.append(t)
+            else:
+                names.pop()
+    cuts.append(round(dur, 3))
+    names = names[:len(cuts) - 1]
+    shots = [{"id": f"S{i + 1:02d}", "start": s, "end": e, "section": n}
+             for i, (s, e, n) in enumerate(zip(cuts, cuts[1:], names))]
+    sb = {"title": a.title or root.name, "preset": a.template, "lang": a.lang,
+          "audio": audio.relative_to(root).as_posix() if audio.is_relative_to(root) else str(audio),
+          "format": a.format, "lyrics_file": "lyrics.yaml"}
+    if a.theme:
+        sb["theme"] = a.theme
+    if a.title or a.artist:
+        sb["title_card"] = ({"artist": a.artist or "", "title": a.title or "", "style": "center", "start": 0.5,
+                             "dur": round(min(5.0, first - 0.9), 2)} if first >= 3.0 else
+                            {"artist": a.artist or "", "title": a.title or "", "style": "minimal", "start": 0.3, "dur": 4})
+    sb["shots"] = shots
+    sbp.write_text(f"# generated by mv auto --template {a.template} - edit freely: change sections, add `layers:` with your\n"
+                   f"# own footage (shots without layers use the template's generated scenes), `theme:`, `palette:`.\n" +
+                   yaml.safe_dump(sb, allow_unicode=True, sort_keys=False, width=200), encoding="utf-8")
+    print(f"[mv] wrote {sbp}: {len(shots)} scenes over {fmt_t(dur)} with template {a.template}"
+          + ("" if beats else " (no analysis.json - cuts not snapped to beats; run mv analyze first for that)"))
 
 
 def cmd_credits(a):
@@ -1597,6 +1921,17 @@ def cmd_doctor(a):
         print("\n(For tools installed elsewhere on this machine, ask the user before running: mv doctor --scan machine)")
 
 
+def cmd_presets(a):
+    pr = load_presets()
+    for title, kind in (("Footage style presets (preset: <name>)", None),
+                        ("Lyric-video templates (mv auto <p> --template <name>, or preset: <name>)", "lyric-template")):
+        print(title)
+        for k, v in pr.items():
+            if v.get("kind") == kind:
+                th = ", ".join(v.get("themes") or {})
+                print(f"  {k:<18} {v.get('description', '')}" + (f"  [themes: {th}]" if th else ""))
+
+
 def cmd_render(a):
     p = Project(a.project)
     p.validate()
@@ -1608,6 +1943,9 @@ def cmd_render(a):
         if a.mode == "final":
             print(f"[mv] encoder auto -> {enc}" + ("" if DR.PROFILE.exists() else " (run `mv doctor` to detect GPU encoders)"))
     r = Renderer(p, a.mode, enc, jobs, a.force)
+    lead = p.apply_cut_lead(r.fps)
+    if lead:
+        print(f"[mv] cut_lead: picture cuts {lead * 1000:.0f} ms before the beat")
     out = r.run_all()
     print(f"[mv] done -> {out}")
     if a.mode == "final":
@@ -1627,6 +1965,17 @@ def main():
     s.add_argument("--lyrics", action="store_true"); s.add_argument("--model", default="auto")
     s.add_argument("--language", default="vi"); s.add_argument("--sections", type=int); s.set_defaults(fn=cmd_analyze)
     s = sub.add_parser("review"); s.add_argument("project"); s.set_defaults(fn=cmd_review)
+    s = sub.add_parser("check", help="edit check against the genre's cutting grammar")
+    s.add_argument("project"); s.add_argument("--genre"); s.set_defaults(fn=cmd_check)
+    s = sub.add_parser("genres"); s.set_defaults(fn=cmd_genres)
+    s = sub.add_parser("sync", help="audio-match a performance clip to the song -> picks.yaml sync offset")
+    s.add_argument("project"); s.add_argument("source"); s.set_defaults(fn=cmd_sync)
+    s = sub.add_parser("auto", help="lyric video storyboard from lyrics.yaml + a template")
+    s.add_argument("project"); s.add_argument("--template", required=True); s.add_argument("--theme")
+    s.add_argument("--format", default="9:16", choices=list(FORMATS)); s.add_argument("--audio")
+    s.add_argument("--title"); s.add_argument("--artist"); s.add_argument("--lang", default="en")
+    s.add_argument("--lines", type=int, default=2, help="max lyric lines per scene (scene variety)")
+    s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_auto)
     s = sub.add_parser("fonts", help="pack | list | get | check | preview")
     s.add_argument("action", nargs="?", default="pack", choices=["pack", "list", "get", "check", "preview"])
     s.add_argument("args", nargs="*", help="font specs (get/check) or project (preview)")
@@ -1650,8 +1999,7 @@ def main():
     s.add_argument("action", choices=["fetch"]); s.add_argument("project")
     s.add_argument("--artist", required=True); s.add_argument("--title", required=True); s.add_argument("--album")
     s.set_defaults(fn=cmd_lyrics)
-    s = sub.add_parser("presets"); s.set_defaults(fn=lambda a: [print(f"  {k:<18} {v.get('description', '')}")
-                                                                 for k, v in load_presets().items()])
+    s = sub.add_parser("presets"); s.set_defaults(fn=cmd_presets)
     s = sub.add_parser("demo"); s.add_argument("name", nargs="?", default="story", choices=DEMOS + ["all"])
     s.add_argument("--dir", default="projects"); s.add_argument("--mode", choices=list(MODES), default="proxy")
     s.add_argument("--encoder", default="auto"); s.add_argument("--force", action="store_true")

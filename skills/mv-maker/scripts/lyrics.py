@@ -21,7 +21,8 @@ FONT_PACK = {
     "Dancing Script": ["dancingscript/DancingScript%5Bwght%5D.ttf"],
     "Pacifico": ["pacifico/Pacifico-Regular.ttf"],
 }
-LYRIC_STYLES = {"subtitle", "karaoke", "word", "typewriter", "stack", "neon", "scroll"}
+LYRIC_STYLES = {"subtitle", "karaoke", "word", "typewriter", "stack", "neon", "scroll",
+                "grunge", "paper", "marker", "stagger"}
 
 
 def font_files(family: str) -> list[Path]:
@@ -117,7 +118,8 @@ def _esc(t: str) -> str:
     return str(t).replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
 
-TYPO_STYLES = {"lyric", "karaoke", "neon", "big", "scroll", "scrollk", "title", "ptitle"}
+TYPO_STYLES = {"lyric", "karaoke", "neon", "big", "scroll", "scrollk", "title", "ptitle", "grunge", "paper", "marker",
+               "stag", "stagbig", "tc_artist", "tc_title"}
 
 
 class AssWriter:
@@ -125,6 +127,7 @@ class AssWriter:
                  typo: dict | None = None, title_font: str | None = None, artist_font: str | None = None):
         self.W, self.H, self.s0, self.t_end = W, H, s0, t_end
         self.base = min(W, H)
+        self.lb = self.base * float((typo or {}).get("size", 1.0))  # lyric size (typo.size scales every lyric style)
         self.vertical = H > W
         self.font, self.display, self.accent = font, display_font, accent
         self.mv = int(H * (0.22 if self.vertical else 0.08))  # 9:16 keeps text above TikTok/Reels UI
@@ -135,7 +138,7 @@ class AssWriter:
         bord, shad = max(0, round(H / 400 * om)), max(0, round(H / 640 * sm))
         sp = round(float(t.get("spacing", 0)) * self.base / 1080, 1)
         bold = 0 if t.get("bold") is False else -1
-        b = self.base
+        b = self.lb
         white = ass_color(t.get("color", "#FFFFFF"))
         black = ass_color(t.get("outline_color", "#000000"))
         shadow = ass_color(t.get("shadow_color", "#000000"), 0x78)
@@ -145,8 +148,8 @@ class AssWriter:
         st = self._style
         self.styles = [
             st("lyric", font, b * 0.066, white, "&H000000FF", black, shadow, bold, 2, self.mv, bord, shad, sp),
-            st("title", font, b * 0.10, white, "&H000000FF", black, shadow, bold, 5, 0, bord, shad, sp),
-            st("credit", font, b * 0.035, "&H00FFFFFF", "&H000000FF", "&H00000000", shadow, 0, 1, int(H * 0.05), 1, 1, 0),
+            st("title", font, self.base * 0.10, white, "&H000000FF", black, shadow, bold, 5, 0, bord, shad, sp),
+            st("credit", font, self.base * 0.035, "&H00FFFFFF", "&H000000FF", "&H00000000", shadow, 0, 1, int(H * 0.05), 1, 1, 0),
             st("karaoke", font, b * 0.066, acc, white, black, shadow, bold, 5, 0, bord, shad, sp),
             st("neon", font, b * 0.07, white, white, acc, "&H00000000", bold, 5, 0, max(2, H // 300), 0, sp),
             st("big", display_font, b * 0.13, white, white, black, ass_color(t.get("shadow_color", "#000000"), 0x96),
@@ -155,14 +158,28 @@ class AssWriter:
                "&H00000000", bold, 7, 0, 1, 0, sp),
             st("scrollk", font, b * (0.056 if self.vertical else 0.05), acc, white, "&H64000000",
                "&H00000000", bold, 7, 0, 1, 0, sp),
-            st("ptitle", title_font or font, b * 0.058, white, white, "&H64000000", shadow, bold, 8, 0, 1, shad, sp),
-            st("partist", artist_font or font, b * 0.04, "&H40FFFFFF", white, "&H64000000", shadow, 0, 8, 0, 1, 0, 0),
+            st("ptitle", title_font or font, self.base * 0.058, white, white, "&H64000000", shadow, bold, 8, 0, 1, shad, sp),
+            st("partist", artist_font or font, self.base * 0.04, "&H40FFFFFF", white, "&H64000000", shadow, 0, 8, 0, 1, 0, 0),
+            st("grunge", display_font, b * 0.105, white, white, "&H00101010", ass_color("#000000", 0x60), 0, 5, 0,
+               max(2, round(bord * 1.4)), shad, sp),
+            # BorderStyle 3 = opaque box behind each row: the outline colour is the paper strip
+            st("paper", font, b * 0.068, ass_color(t.get("paper_text", "#1A1A1A")), white,
+               ass_color(t.get("paper", "#F4EDE0")), ass_color("#000000", 0x90), bold, 5, 0,
+               max(4, round(H / 130)), max(2, round(H / 400)), sp, border_style=3),
+            st("marker", font, b * 0.066, white, white, acc, ass_color("#000000", 0x80), bold, 5, 0,
+               max(5, round(H / 110)), 0, sp),
+            st("stag", font, b * 0.064, white, white, black, shadow, bold, 5, 0, bord, shad, sp),
+            st("stagbig", display_font, b * 0.15, acc, acc, black, shadow, 0, 5, 0, bord, shad * 2, sp),
+            st("tc_artist", font, self.base * 0.034, white, white, black, shadow, bold, 1, 0, max(1, bord // 2), shad,
+               round(self.base * 0.006, 1)),
+            st("tc_title", display_font, self.base * 0.07, white, white, black, shadow, 0, 1, 0, bord, shad, sp),
         ]
 
     @staticmethod
-    def _style(name, font, size, prim, sec, outl, back, bold, align, marg_v, bord, shad, spacing=0) -> str:
-        return (f"Style: {name},{font},{int(size)},{prim},{sec},{outl},{back},{bold},0,0,0,100,100,{spacing},0,1,"
-                f"{bord},{shad},{align},0,0,{marg_v},1")
+    def _style(name, font, size, prim, sec, outl, back, bold, align, marg_v, bord, shad, spacing=0,
+               border_style=1) -> str:
+        return (f"Style: {name},{font},{int(size)},{prim},{sec},{outl},{back},{bold},0,0,0,100,100,{spacing},0,"
+                f"{border_style},{bord},{shad},{align},0,0,{marg_v},1")
 
     def _ts(self, x: float) -> str:
         x = max(0.0, x - self.s0)
@@ -205,7 +222,7 @@ class AssWriter:
     # ------------------------------------------------------------------ lyric lines
     def default_area(self, style: str) -> tuple[int, int, int, int]:
         W, H = self.W, self.H
-        if style == "stack":
+        if style in ("stack", "grunge", "paper", "stagger", "marker"):
             return (int(W * 0.08), int(H * 0.26), int(W * 0.92), int(H * 0.70))
         if style == "scroll":
             return (int(W * 0.08), int(H * 0.52), int(W * 0.92), H - self.mv) if self.vertical else \
@@ -244,6 +261,14 @@ class AssWriter:
                 self._stack(ln, ar)
             elif st == "neon":
                 self._neon(ln, ar)
+            elif st == "grunge":
+                self._grunge(ln, ar, i)
+            elif st == "paper":
+                self._paper(ln, ar, i)
+            elif st == "marker":
+                self._marker(ln, ar)
+            elif st == "stagger":
+                self._stagger(ln, ar, i)
             else:
                 self._subtitle(ln, ar, anim)
         if scroll_idx:
@@ -306,7 +331,7 @@ class AssWriter:
     def _stack(self, ln, ar):
         x0, y0, x1, y1 = ar
         cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
-        big = self.base * 0.13
+        big = self.lb * 0.13
         wt = [(w.upper(), s, e) for w, s, e in word_times(ln)]
         rows = wrap_words([w for w, _, _ in wt], max(4, int((x1 - x0) / (big * 0.48))))
         sizes = []
@@ -325,9 +350,142 @@ class AssWriter:
                    f"\\t(0,140,\\fscx100\\fscy100)\\fad(60,160)}}")
             self.add(wt[r[0]][1] - 0.05, ln["_end"], "big", tag + _esc(" ".join(wt[i][0] for i in r)))
 
+    def _rows(self, ln, ar, size, upper=False):
+        """Word timing + greedy rows sized for the area (display fonts run ~0.5 em per character)."""
+        x0, _, x1, _ = ar
+        wt = [((w.upper() if upper else w), s, e) for w, s, e in word_times(ln)]
+        rows = wrap_words([w for w, _, _ in wt], max(4, int((x1 - x0) / (size * 0.5))))
+        return wt, rows
+
+    def _grunge(self, ln, ar, n):
+        """Distressed punk/rock lettering: rows tilt and jolt in, words slam in as sung, accent misprint ghost."""
+        x0, y0, x1, y1 = ar
+        cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+        size = self.lb * 0.105
+        wt, rows = self._rows(ln, ar, size, upper=True)
+        lh = size * 1.05
+        y = cy - lh * len(rows) / 2 + lh / 2
+        acc = ass_color(self.accent)
+        off = max(2, int(self.base / 160))
+        for k, r in enumerate(rows):
+            rot = ((n * 3 + k * 5) % 7 - 3) * 1.1  # deterministic tilt, -3.3..3.3 degrees
+            yy = int(y + k * lh)
+            t0 = max(ln["_start"], wt[r[0]][1] - 0.05)
+            words = []
+            for i in r:
+                ms = max(0, int((wt[i][1] - t0) * 1000))
+                words.append(f"{{\\alpha&HFF&\\t({ms},{ms + 40},\\alpha&H00&)}}{_esc(wt[i][0])}")
+            body = " ".join(words)
+            anim = "\\fscx112\\fscy112\\t(0,90,\\fscx100\\fscy100)\\fad(0,140)"
+            main = f"{{\\an5\\frz{rot:.1f}\\move({cx + off * 3},{yy - off * 2},{cx},{yy},0,90){anim}\\blur0.6}}"
+            ghost = (f"{{\\an5\\frz{rot:.1f}\\pos({cx + off},{yy + off}){anim}\\1c{acc}\\1a&H60&\\bord0\\shad0"
+                     f"\\blur1.5}}")
+            self.add(t0, ln["_end"], "grunge", ghost + body, layer=0)
+            self.add(t0, ln["_end"], "grunge", main + body, layer=1)
+
+    def _paper(self, ln, ar, n):
+        """Cut-out paper strips: each row on its own tilted strip, popping in; the longest row on an accent strip."""
+        x0, y0, x1, y1 = ar
+        cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+        size = self.lb * 0.068
+        wt, rows = self._rows(ln, ar, size * 1.15)
+        lh = size * 1.75
+        y = cy - lh * len(rows) / 2 + lh / 2
+        longest = max(range(len(rows)), key=lambda k: len(" ".join(wt[i][0] for i in rows[k])))
+        for k, r in enumerate(rows):
+            rot = 2.4 if (n + k) % 2 else -2.0
+            dx = int(self.base * 0.03) * (1 if (n + k) % 2 else -1)
+            yy = int(y + k * lh)
+            t0 = max(ln["_start"], wt[r[0]][1] - 0.12)
+            col = f"\\3c{ass_color(self.accent)}" if k == longest and len(rows) > 1 else ""
+            tag = (f"{{\\an5\\pos({cx + dx},{yy})\\frz{rot}{col}\\fscx60\\fscy60"
+                   f"\\t(0,160,\\fscx106\\fscy106)\\t(160,240,\\fscx100\\fscy100)\\fad(40,160)}}")
+            self.add(t0, ln["_end"], "paper", tag + _esc(" ".join(wt[i][0] for i in r)), layer=k)
+
+    def _marker(self, ln, ar):
+        """Highlighter pen: each word gets a thick accent marker stroke (and dark ink) the moment it is sung."""
+        pos, ml, mr = self._pos(ar)
+        t0 = ln["_start"]
+        ink = ass_color(self.typo.get("marker_ink", "#141414"))
+        plain = ass_color(self.typo.get("color", "#FFFFFF"))  # reset per word: an earlier \t would carry over
+        parts = [f"{{{pos}\\fad(120,180)}}"]
+        for w, s, e in word_times(ln):
+            ms = max(0, int((s - t0) * 1000))
+            parts.append(f"{{\\1c{plain}\\3a&HFF&\\t({ms},{ms + 110},\\3a&H00&\\1c{ink})}}{_esc(w)} ")
+        self.add(t0, ln["_end"], "marker", "".join(parts).rstrip(), ml=ml, mr=mr)
+
+    def _stagger(self, ln, ar, n):
+        """Kinetic layout: the key word huge in the display font, the rest small around it; lines alternate
+        left / right / centre and slide in. Key word = `emph:` on the lyric line, else the longest word."""
+        x0, y0, x1, y1 = ar
+        wt = word_times(ln)
+        words = [w for w, _, _ in wt]
+        emph = str(ln.get("emph") or "").strip().lower()
+        k = next((i for i, w in enumerate(words) if w.lower().strip(",.!?") == emph), None) if emph else None
+        if k is None:
+            k = max(range(len(words)), key=lambda i: len(words[i].strip(",.!?")))
+        side = n % 3  # 0 left, 1 right, 2 centre
+        an, x = {0: (4, x0), 1: (6, x1), 2: (5, (x0 + x1) // 2)}[side]
+        slide = int(self.W * 0.06) * (-1 if side == 0 else (1 if side == 1 else 0))
+        big = self.lb * 0.15
+        bigsize = big * min(1.0, (x1 - x0) / max(1.0, len(words[k]) * big * 0.5))
+        small = self.lb * 0.064
+        before, after = " ".join(words[:k]), " ".join(words[k + 1:])
+        cy = (y0 + y1) // 2 + int((y1 - y0) * (-0.12 if n % 2 else 0.1))
+        rows = []
+        if before:
+            rows.append(("stag", before, small, wt[0][1]))
+        rows.append(("stagbig", words[k].upper(), bigsize, wt[k][1]))
+        if after:
+            rows.append(("stag", after, small, wt[k + 1][1]))
+        total = sum(sz * 1.05 for _, _, sz, _ in rows)
+        y = cy - total / 2
+        for style, text, sz, t in rows:
+            yy = int(y + sz * 0.52)
+            y += sz * 1.05
+            t0 = max(ln["_start"], t - 0.08)
+            pop = "\\fscx125\\fscy125\\t(0,150,\\fscx100\\fscy100)" if style == "stagbig" else ""
+            tag = f"{{\\an{an}\\move({x + slide},{yy},{x},{yy},0,220){pop}\\fs{int(sz)}\\fad(90,160)}}"
+            self.add(t0, ln["_end"], style, tag + _esc(text))
+
+    # ------------------------------------------------------------------ title / end cards (official-MV style)
+    def title_card(self, card: dict, start: float, end: float, kind: str = "title"):
+        """Artist + song title as in official music videos. style: official (lower-left, letter-spaced artist,
+        "Title" in the display font) | center (centred, cinematic) | minimal (small, top-left)."""
+        W, H = self.W, self.H
+        style = card.get("style", "center" if kind == "end" else "official")
+        artist, title, sub = str(card.get("artist", "")), str(card.get("title", "")), str(card.get("sub", ""))
+        if kind == "end":
+            title, artist, sub = str(card.get("text", title)), str(card.get("sub", "")), ""
+        fade = "\\fad(500,600)"
+        if style == "center":
+            cx, cy = W // 2, H // 2
+            if artist:
+                grow = f"\\t(0,{int((end - start) * 1000)},\\fsp{round(self.base * 0.012, 1)})"
+                self.add(start, end, "tc_artist",
+                         f"{{\\an2\\pos({cx},{cy - int(self.base * 0.05)}){fade}{grow}}}{_esc(artist.upper())}")
+            self.add(start, end, "tc_title", f"{{\\an8\\pos({cx},{cy - int(self.base * 0.03)}){fade}\\fs{int(self.base * 0.11)}}}{_esc(title)}")
+            return
+        if style == "minimal":
+            x, y = int(W * 0.06), int(H * 0.06)
+            text = _esc(artist.upper()) + (f"\\N{{\\b0}}{_esc(title)}" if title else "")
+            self.add(start, end, "tc_artist", f"{{\\an7\\pos({x},{y}){fade}}}{text}")
+            return
+        x = int(W * 0.07)
+        yb = int(H * (0.60 if self.vertical else 0.76))  # above the lyric zone (9:16 UI-safe lyrics sit lower)
+        rise = int(H * 0.012)
+        q = f"\u201c{title}\u201d" if title and kind == "title" else title
+        self.add(start, end, "tc_title", f"{{\\an1\\move({x},{yb + rise},{x},{yb},0,600){fade}}}{_esc(q)}")
+        if artist:
+            ya = yb - int(self.base * 0.085)
+            self.add(start, end, "tc_artist",
+                     f"{{\\an1\\move({x},{ya + rise},{x},{ya},0,600){fade}}}{_esc(artist.upper())}")
+        if sub:
+            self.add(start, end, "credit", f"{{\\an7\\pos({x},{yb + int(self.base * 0.012)}){fade}}}{_esc(sub)}")
+
     def _scroll(self, lines, idx, ar, align, highlight):
         x0, y0, x1, y1 = ar
-        fs = self.base * (0.056 if self.vertical else 0.05)
+        fs = self.lb * (0.056 if self.vertical else 0.05)
         lh, gap = fs * 1.3, fs * 0.6
         maxc = max(8, int((x1 - x0) / (fs * 0.52)))
         wts = [word_times(l) for l in lines]

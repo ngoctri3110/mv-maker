@@ -1,0 +1,39 @@
+# Professional pop MV grammar on synthetic footage: performance / story / b-roll intercut, shot sizes that change
+# on every cut, lip-synced performance clip (mv sync finds its offset), faster cutting into the last chorus,
+# cut_lead (picture cuts 1 frame before the beat), official-style title card and end card.
+title: "Demo: pop MV grammar"
+slug: genre-mv
+lang: en
+genre: pop
+preset: pop-bright
+audio: audio/song.mp3
+format: "9:16"
+fps: 30
+lyrics_file: lyrics.yaml
+title_card: {artist: "Demo Artist", title: "Mùa Hè Của Em", sub: "Official Music Video", start: 0.4, dur: 3.4}
+end_card: {text: "Demo Artist", sub: "mv-maker", dur: 2.2}
+sources:
+  perf: {note: "Performance: artist sings to camera, shot to song playback (lip-sync)"}
+  story: {note: "Story world: the couple, wide moments"}
+  detail: {note: "B-roll details: hands, objects, light"}
+shots:
+  - {id: S01, start: 0, end: 2, section: intro, role: narrative, size: wide, layers: [{src: story, in: 2}], intent: "Establish the world"}
+  - {id: S02, start: 2, end: 4, section: verse, role: performance, size: medium, layers: [{src: perf, lipsync: true}]}
+  - {id: S03, start: 4, end: 5.5, section: verse, role: narrative, size: wide, layers: [{src: story, in: 8}]}
+  - {id: S04, start: 5.5, end: 7, section: verse, role: performance, size: close, layers: [{src: perf, lipsync: true}]}
+  - {id: S05, start: 7, end: 8, section: verse, role: broll, size: insert, layers: [{src: detail, zoom: in}]}
+  - {id: S06, start: 8, end: 9, section: pre-chorus, role: performance, size: mcu, layers: [{src: perf, lipsync: true}]}
+  - {id: S07, start: 9, end: 10, section: pre-chorus, role: narrative, size: medium, layers: [{src: story, in: 14}], transition: flash}
+  - {id: S08, start: 10, end: 11, section: chorus, role: performance, size: wide, layers: [{src: perf, lipsync: true, focus: [0.5, 0.5]}]}
+  - {id: S09, start: 11, end: 12, section: chorus, role: performance, size: close, layers: [{src: perf, lipsync: true}]}
+  - {id: S10, start: 12, end: 13, section: chorus, role: narrative, size: medium, layers: [{src: story, in: 20}]}
+  - {id: S11, start: 13, end: 14, section: chorus, role: performance, size: medium, layers: [{src: perf, lipsync: true}]}
+  - {id: S12, start: 14, end: 15, section: chorus, role: broll, size: ecu, layers: [{src: detail, zoom: out}]}
+  - {id: S13, start: 15, end: 16, section: chorus, role: performance, size: close, layers: [{src: perf, lipsync: true}], transition: "fadeblack:0.6"}
+  - {id: S14, start: 16, end: 19, section: bridge, role: narrative, size: wide, layers: [{src: story, in: 26, speed: 0.6}], fx: [bw]}
+  - {id: S15, start: 19, end: 20, section: chorus, role: performance, size: wide, layers: [{src: perf, lipsync: true}]}
+  - {id: S16, start: 20, end: 20.5, section: chorus, role: narrative, size: close, layers: [{src: story, in: 31}]}
+  - {id: S17, start: 20.5, end: 21.5, section: chorus, role: performance, size: close, layers: [{src: perf, lipsync: true}]}
+  - {id: S18, start: 21.5, end: 22, section: chorus, role: broll, size: insert, layers: [{src: detail, zoom: in}]}
+  - {id: S19, start: 22, end: 23, section: chorus, role: performance, size: medium, layers: [{src: perf, lipsync: true}]}
+  - {id: S20, start: 23, end: 24, section: chorus, role: narrative, size: wide, layers: [{src: story, in: 36}]}

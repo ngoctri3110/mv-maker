@@ -1,0 +1,8 @@
+# Built into a full lyric video by: mv auto <project> --template lv-kinetic --title ... --artist ...
+lines:
+- {start: 3.4, end: 6.0, text: "Ngày hôm ấy nắng vàng trên phố", section: Verse}
+- {start: 6.4, end: 9.0, text: "Em đi qua anh bối rối nhìn theo", section: Verse}
+- {start: 9.4, end: 12.4, text: "Một mùa hè rực rỡ như chưa từng có", section: Chorus}
+- {start: 12.8, end: 15.6, text: "Mùa hè của em là những giấc mơ", section: Chorus}
+- {start: 16.4, end: 19.6, text: "Cho anh xin một lần được bên em", section: Bridge, emph: "lần"}
+- {start: 20.4, end: 23.4, text: "Mãi mãi mùa hè của em", section: Chorus, emph: "mãi"}
