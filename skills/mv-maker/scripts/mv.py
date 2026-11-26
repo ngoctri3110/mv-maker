@@ -18,6 +18,10 @@ Subcommands:
                                      planning digest: only the genre / presets / techniques / fields this project needs
   review   <project>                 storyboard.yaml -> storyboard.md (for human approval, incl. edit check)
   proof    <project> [--only S03,S07] one labelled frame per shot in a single sheet (refs/proof.jpg) - check the edit
+  qa       <project> [--mode final]  check rendered files: black / frozen frames, A/V sync, loudness, specs -> out/qa.md
+  thumbnail <project> [--format f] [--at m:ss]  best frame + title -> out/thumb_<aspect>.jpg (YouTube / cover)
+  srt      <project> [--cut a-b]     lyrics as SubRip captions -> out/<slug>.srt
+  deliver  <project> [--mode final]  every platform version + short cut + srt + thumbnails + description + QA
   check    <project> [--genre g]     edit check against the genre's cutting grammar (reference/genres.yaml)
   genres                             list genres (cutting grammar + fitting presets)
   sync     <project> <source_id>     find a performance clip's offset to the song (audio match) -> picks.yaml
@@ -74,6 +78,7 @@ import editcheck as EC  # noqa: E402
 import platforms as PL  # noqa: E402
 import assist as AS  # noqa: E402
 import footage as FG  # noqa: E402
+import deliver as DL  # noqa: E402
 import threading  # noqa: E402
 
 RT.apply_runtime_env()  # FFmpeg chosen with `mv doctor --use-ffmpeg` (this process only)
@@ -145,7 +150,9 @@ def probe_wh(f: Path) -> tuple[int, int]:
 
 
 def run(cmd: list[str], cwd: Path | None = None, quiet: bool = True):
-    r = subprocess.run(cmd, cwd=cwd, capture_output=quiet, text=True, encoding="utf-8", errors="replace")
+    # stdin=DEVNULL: FFmpeg reads the keyboard by default; with a vanished console it can spin forever
+    r = subprocess.run(cmd, cwd=cwd, capture_output=quiet, text=True, encoding="utf-8", errors="replace",
+                       stdin=subprocess.DEVNULL)
     if r.returncode != 0:
         tail = (r.stderr or "")[-2500:] if quiet else ""
         die(f"command failed ({r.returncode}): {' '.join(map(str, cmd[:6]))} ...\n{tail}")
@@ -1239,6 +1246,9 @@ class Renderer:
         if n_a is not None:
             fo = float(p.sb.get("audio_fade_out", 0))
             af = f"afade=t=out:st={max(0, total - fo):.3f}:d={fo}" if fo > 0 else "anull"
+            fi = float(p.sb.get("audio_fade_in", 0) or 0)
+            if fi > 0:
+                af = f"afade=t=in:st=0:d={fi}," + af
             if p.sb.get("loudness") is not None:  # only for mixes far off the platforms' ~-14 LUFS target
                 af += f",loudnorm=I={float(p.sb['loudness'])}:TP=-1:LRA=11"
             graph.append(f"[{a_src or f'{n_a}:a'}]{af}[aout]")
@@ -2338,6 +2348,222 @@ def footage_warnings(p: "Project", limit: float = 1.5) -> list[str]:
             for sid, v in sorted(worst.items(), key=lambda x: -x[1]["k"])]
 
 
+def _shot_at(p: "Project", offset: float):
+    s0 = tsec(p.shots[0]["start"])
+
+    def at(t: float) -> str:
+        song = t + s0 + offset
+        sh = next((x for x in p.shots if tsec(x["start"]) <= song < tsec(x["end"])), p.shots[-1])
+        return str(sh["id"])
+    return at
+
+
+def _intended(p: "Project", offset: float):
+    """Black / frozen stretches that the edit explains (dips, freezes, still images, static backgrounds)."""
+    s0 = tsec(p.shots[0]["start"])
+
+    def ok(kind: str, t0: float, t1: float) -> bool:
+        a, b = t0 + s0 + offset, t1 + s0 + offset
+        for i, sh in enumerate(p.shots):
+            ss, se = tsec(sh["start"]), tsec(sh["end"])
+            if se <= a - 1.0 or ss >= b + 1.0:
+                continue
+            tr = str(sh.get("transition", "cut"))
+            prev = str(p.shots[i - 1].get("transition", "cut")) if i else "cut"
+            if kind == "black" and (tr.startswith(("fadeblack", "flashblack")) or prev.startswith(("fadeblack", "flashblack"))):
+                return True
+            if kind == "frozen":
+                for ly in sh.get("layers") or []:
+                    if not isinstance(ly, dict):
+                        continue
+                    f = p.source_file(ly.get("src")) if ly.get("src") else None
+                    if ly.get("freeze") or p.gen_spec(ly.get("src")) or f is None or \
+                            (f.suffix.lower() in IMAGE_EXT and not ly.get("zoom")):
+                        return True
+        return False
+    return ok
+
+
+def _qa_file(p: "Project", f: Path) -> list[str]:
+    m = re.search(r"_cut(\d+)-(\d+)_", f.name)
+    offset = float(m.group(1)) - tsec(p.shots[0]["start"]) if m else 0.0
+    expect = (float(m.group(2)) - float(m.group(1))) if m else tsec(p.shots[-1]["end"]) - tsec(p.shots[0]["start"])
+    aspect = re.search(r"_(\d+x\d+)\.mp4$", f.name)
+    fmt = aspect.group(1).replace("x", ":") if aspect else str(p.sb.get("format", "9:16"))
+    max_sec = None
+    if p.sb.get("platforms"):
+        data = PL.load()
+        lims = [data[k]["max_sec"] for k in PL.expand(p.sb["platforms"]) if data[k]["format"] == fmt]
+        max_sec = min(lims) if lims else None
+    res = DL.parse_scan(DL.scan(f))
+    w = DL.qa_report(DL.probe(f), res, expect, _shot_at(p, offset), _intended(p, offset), max_sec)
+    if m and abs(expect - round(expect)) > 0.6:
+        pass
+    print(f"[mv] {f.name}: {res['lufs']} LUFS, true peak {res['true_peak']} dBFS - "
+          + (f"{len(w)} issue(s)" if w else "OK"))
+    for x in w:
+        print(f"  ⚠ {x}")
+    return w
+
+
+def cmd_qa(a):
+    p = Project(a.project)
+    files = [Path(a.file)] if a.file else sorted(f for f in p.out.glob(f"*_{a.mode}_*.mp4"))
+    if not files:
+        die(f"no {a.mode} renders in {p.out} - mv render {p.root} --mode {a.mode}")
+    L = ["# QA", ""]
+    for f in files:
+        w = _qa_file(p, f)
+        L += [f"## {f.name}", ""] + ([f"- ⚠ {x}" for x in w] or ["- ✅ OK"]) + [""]
+    (p.out / "qa.md").write_text("\n".join(L), encoding="utf-8")
+    print(f"[mv] wrote {p.out / 'qa.md'}")
+
+
+def _write_srt(p: "Project", start: float | None = None, end: float | None = None, name: str | None = None) -> Path | None:
+    lines = p.lyric_lines()
+    if not lines:
+        return None
+    s0 = tsec(p.shots[0]["start"]) if start is None else start
+    e1 = tsec(p.shots[-1]["end"]) if end is None else end
+    p.out.mkdir(exist_ok=True)
+    out = p.out / (name or f"{p.sb.get('slug') or p.root.name}.srt")
+    out.write_text(DL.srt(lines, s0, e1), encoding="utf-8")
+    return out
+
+
+def cmd_srt(a):
+    p = Project(a.project)
+    a0 = b0 = None
+    name = None
+    if a.cut:
+        x, _, y = a.cut.partition("-")
+        a0, b0 = tsec(x), tsec(y)
+        name = f"{p.sb.get('slug') or p.root.name}_cut{int(a0)}-{int(b0)}.srt"
+    out = _write_srt(p, a0, b0, name)
+    print(f"[mv] wrote {out}" if out else "[mv] no lyrics_file - nothing to export")
+
+
+def cmd_thumbnail(a):
+    """Best frame of the edit (sharp, exposed, colourful, a face; chorus favoured) + the title -> out/thumb_<aspect>.jpg.
+    Frames come from the rendered shots (no lyrics burned in): render this format first."""
+    p = Project(a.project)
+    fmt = a.format or str(p.sb.get("format", "9:16"))
+    mode = a.mode
+    shots_dir = p.build / mode / "shots"
+    W, H = FORMATS[fmt]
+    files = [shots_dir / f"{i:03d}_{sh['id']}.mp4" for i, sh in enumerate(p.shots)]
+    if not all(f.exists() for f in files):
+        die(f"render the {fmt} {mode} version first: mv render {p.root} --mode {mode} --format {fmt}")
+    sw, sh_ = FG.probe_wh(files[0])
+    if sw and abs(sw / max(sh_, 1) - W / H) > 0.02:
+        die(f"the {mode} shots are {sw}x{sh_}, not {fmt} - mv render {p.root} --mode {mode} --format {fmt}")
+    work = p.build / "thumb"
+    work.mkdir(parents=True, exist_ok=True)
+    cands = []
+    for i, sh in enumerate(p.shots):
+        d = tsec(sh["end"]) - tsec(sh["start"])
+        if a.at:
+            t_song = tsec(a.at)
+            if not tsec(sh["start"]) <= t_song < tsec(sh["end"]):
+                continue
+            times = [t_song - tsec(sh["start"])]
+        else:
+            times = [d * 0.5] if d < 2.5 else [d * 0.3, d * 0.7]
+        for t in times:
+            img = work / f"c_{i:03d}_{int(t * 100)}.jpg"
+            run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", str(files[i]), "-frames:v", "1", "-q:v", "2", str(img)])
+            score = DL.frame_score(img) + (0.08 if EC.canon(str(sh.get("section", ""))) in ("chorus", "drop") else 0)
+            if i == 0 and len(p.shots) > 3:
+                score -= 0.05  # the intro is rarely the best image
+            cands.append({"thumb": str(img), "score": round(score, 3), "shot": sh["id"], "t": tsec(sh["start"]) + t})
+    if not cands:
+        die("no frame found (check --at)")
+    cands.sort(key=lambda c: -c["score"])
+    SRC.contact_sheet(cands[:8], p.root / "refs" / "thumb_candidates.jpg", work / "sheet", _sheet_font())
+    best = cands[0]
+    tc = p.sb.get("title_card") or {}
+    title = a.title or tc.get("title") or p.sb.get("title") or p.root.name
+    artist = tc.get("artist") or (p.sb.get("poster") or {}).get("artist") or ""
+    vertical = H > W
+    tw, th = (1280, 720) if not vertical else (1080, 1920)
+    font = FT.resolve(p.sb.get("font"), "Be Vietnam Pro" if LY.has_font("Be Vietnam Pro") else "Arial")
+    display = FT.resolve(p.sb.get("display_font"), "Anton" if LY.has_font("Anton") else font)
+    Renderer._sync_fonts(work / "fonts")
+    (work / "t.ass").write_text(DL.thumb_ass(tw, th, title, artist, display, font, p.sb.get("accent", "#FFD24D"), vertical),
+                                encoding="utf-8-sig")
+    ramp = "clip((Y/H-0.40)/0.60,0,1)" if not vertical else "clip((0.42-Y/H)/0.42,0,1)"  # soft dark fade behind the title
+    shade = f"format=yuv444p,geq=lum='lum(X,Y)*(1-0.55*{ramp})':cb='cb(X,Y)':cr='cr(X,Y)'"
+    out = p.out / f"thumb_{fmt.replace(':', 'x')}.jpg"
+    p.out.mkdir(exist_ok=True)
+    run(["ffmpeg", "-v", "error", "-y", "-i", str(Path(best["thumb"]).resolve()), "-vf",
+         f"scale={tw}:{th}:force_original_aspect_ratio=increase:flags=lanczos,crop={tw}:{th},eq=saturation=1.12:contrast=1.05,"
+         f"{shade},subtitles=t.ass:fontsdir=fonts", "-q:v", "2", str(out.resolve())], cwd=work)
+    print(f"[mv] {out}  (frame {best['shot']} @ {fmt_t(best['t'])}, score {best['score']}) · other picks: "
+          f"refs/thumb_candidates.jpg (use --at m:ss)")
+    return out
+
+
+def cmd_deliver(a):
+    """Everything to publish, in one go: each platform version (full + short cut), SRT captions, thumbnails,
+    credits + a description draft, and QA of every file -> out/deliver.md."""
+    p = Project(a.project)
+    p.validate()
+    slug = p.sb.get("slug") or p.root.name
+    s0, e1 = tsec(p.shots[0]["start"]), tsec(p.shots[-1]["end"])
+    dur = e1 - s0
+    if p.sb.get("platforms"):
+        pl = PL.plan(p.sb["platforms"], dur)
+        versions = list(pl["versions"])
+        best = pl["best_cut_sec"] or 60
+        want_short = dur > best * 1.2 and any(ASPECT_V(f) for f in versions)
+    else:
+        versions, best, want_short = [str(p.sb.get("format", "9:16"))], 60, False
+    cut = a.cut or p.sb.get("short_cut")
+    if want_short and not cut:
+        win = DL.short_window(p.shots, min(best, 45), EC.canon)
+        cut = f"{win[0]:.2f}-{win[1]:.2f}" if win else None
+    made = []
+    for fmt in versions:
+        base = argparse.Namespace(project=a.project, mode=a.mode, encoder=a.encoder, jobs=None, force=False,
+                                  format=fmt, cut=None, exact=False)
+        cmd_render(base)
+        made.append(_out_video(Project(a.project), a.mode, fmt))
+        made.append(cmd_thumbnail(argparse.Namespace(project=a.project, format=fmt, mode=a.mode, at=None, title=None)))
+        if cut and ASPECT_V(fmt):
+            cmd_render(argparse.Namespace(**{**vars(base), "cut": cut}))
+    cuts = sorted(p.out.glob(f"{slug}_cut*_{a.mode}_*.mp4"))
+    made += [c for c in cuts if c not in made]
+    srt = _write_srt(p)
+    if srt:
+        made.append(srt)
+    for c in cuts:
+        m = re.search(r"_cut(\d+)-(\d+)_", c.name)
+        s2 = _write_srt(p, float(m.group(1)), float(m.group(2)), f"{slug}_cut{m.group(1)}-{m.group(2)}.srt") if m else None
+        if s2 and s2 not in made:
+            made.append(s2)
+    cred = write_credits(p)
+    tc = p.sb.get("title_card") or {}
+    desc = p.out / "description.txt"
+    lines = p.lyric_lines()
+    desc.write_text("\n".join([f"{tc.get('title') or p.sb.get('title', slug)}" + (f" - {tc['artist']}" if tc.get("artist") else ""),
+                               "", "(write 1-2 lines about the song here, in the audience's language; add hashtags)", "",
+                               *(["Lyrics:", *[str(l["text"]) for l in lines], ""] if lines else []),
+                               cred.read_text(encoding="utf-8")]), encoding="utf-8")
+    made += [cred, desc]
+    report = ["# Delivery - " + str(p.sb.get("title", slug)), ""]
+    for f in [m for m in made if m and Path(m).suffix == ".mp4"]:
+        w = _qa_file(p, Path(f))
+        report += [f"- **{Path(f).name}**" + (" ✅" if not w else "")] + [f"  - ⚠ {x}" for x in w]
+    report += ["", "Other files:"] + [f"- {Path(m).name}" for m in made if m and Path(m).suffix != ".mp4"]
+    (p.out / "deliver.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+    print(f"[mv] delivery ready in {p.out} - summary: {p.out / 'deliver.md'}")
+
+
+def ASPECT_V(fmt: str) -> bool:
+    w, h = FORMATS.get(fmt, (1, 1))
+    return h > w
+
+
 def cmd_check(a):
     p = Project(a.project)
     p.validate()
@@ -2793,11 +3019,19 @@ def cmd_presets(a):
                 print(f"  {k:<18} {v.get('description', '')}" + (f"  [themes: {th}]" if th else ""))
 
 
-def apply_cut(p: "Project", cut: str) -> None:
+def apply_cut(p: "Project", cut: str, snap: bool = True) -> tuple[float, float]:
     """Short version of the same edit (e.g. the chorus for TikTok / Reels / Shorts): keep the shots inside
-    `m:ss-m:ss`, trim the first and last ones, shift in-points so the picture stays as edited."""
+    `m:ss-m:ss`, trim the first and last ones, shift in-points so the picture stays as edited. The cut points move to
+    the nearest bar line (unless `--exact`) and the audio fades in / out, so the short version starts and ends musically."""
     a0, _, b0 = str(cut).partition("-")
     a0, b0 = tsec(a0), tsec(b0)
+    song_end = tsec(p.shots[-1]["end"])
+    if snap:
+        bars = p.downbeats or p.beats[::4]
+        a1, b1 = DL.snap_cut(a0, b0, bars)
+        if (a1, b1) != (a0, b0):
+            print(f"[mv] cut snapped to bars: {fmt_t(a0)}-{fmt_t(b0)} -> {fmt_t(a1)}-{fmt_t(b1)} (--exact keeps yours)")
+        a0, b0 = a1, b1
     keep = [sh for sh in p.shots if tsec(sh["end"]) > a0 + 0.05 and tsec(sh["start"]) < b0 - 0.05]
     if b0 <= a0 or not keep:
         die(f"--cut {cut}: no shots in that range")
@@ -2813,7 +3047,13 @@ def apply_cut(p: "Project", cut: str) -> None:
     p.shots[:] = keep
     p._resolve_lipsync()
     p.sb["slug"] = f"{p.sb.get('slug') or p.root.name}_cut{int(a0)}-{int(b0)}"
+    if a0 > 0.05:
+        p.sb["audio_fade_in"] = max(float(p.sb.get("audio_fade_in") or 0), 0.25)
+    if b0 < song_end - 0.05:
+        p.sb["audio_fade_out"] = max(float(p.sb.get("audio_fade_out") or 0), 1.2)
+        p.sb["fade_out"] = max(float(p.sb.get("fade_out", 1.0) or 0), 0.8)
     print(f"[mv] cut {fmt_t(a0)}-{fmt_t(b0)}: {len(keep)} shots")
+    return a0, b0
 
 
 def cmd_platforms(a):
@@ -2843,7 +3083,7 @@ def cmd_render(a):
     if getattr(a, "format", None):
         p.sb["format"] = a.format
     if getattr(a, "cut", None):
-        apply_cut(p, a.cut)
+        apply_cut(p, a.cut, snap=not getattr(a, "exact", False))
     p.validate()
     prof = DR.load_profile()
     jobs = a.jobs or prof.get("jobs") or max(1, (os.cpu_count() or 4) // 4)
@@ -2882,6 +3122,18 @@ def main():
     s.add_argument("--format", choices=list(FORMATS)); s.add_argument("--only", help="comma-separated shot ids")
     s.set_defaults(fn=cmd_proof)
     s = sub.add_parser("status", help="project state + next step"); s.add_argument("project"); s.set_defaults(fn=cmd_status)
+    s = sub.add_parser("qa", help="check rendered files before publishing")
+    s.add_argument("project"); s.add_argument("--mode", choices=list(MODES), default="final"); s.add_argument("--file")
+    s.set_defaults(fn=cmd_qa)
+    s = sub.add_parser("srt", help="lyrics as SubRip captions"); s.add_argument("project"); s.add_argument("--cut")
+    s.set_defaults(fn=cmd_srt)
+    s = sub.add_parser("thumbnail", help="best frame + title -> out/thumb_<aspect>.jpg")
+    s.add_argument("project"); s.add_argument("--format", choices=list(FORMATS)); s.add_argument("--at")
+    s.add_argument("--title"); s.add_argument("--mode", choices=list(MODES), default="final"); s.set_defaults(fn=cmd_thumbnail)
+    s = sub.add_parser("deliver", help="all platform versions + short cut + srt + thumbnails + description + QA")
+    s.add_argument("project"); s.add_argument("--mode", choices=list(MODES), default="final")
+    s.add_argument("--encoder", default="auto"); s.add_argument("--cut", help="short version m:ss-m:ss (default: first chorus)")
+    s.set_defaults(fn=cmd_deliver)
     s = sub.add_parser("context", help="planning digest for this project (instead of reading every reference)")
     s.add_argument("--project"); s.add_argument("--type", choices=["mv", "lyric", "poster"], default="mv")
     s.add_argument("--genre"); s.add_argument("--platforms"); s.add_argument("--mood"); s.set_defaults(fn=cmd_context)
@@ -2960,6 +3212,7 @@ def main():
     s = sub.add_parser("render"); s.add_argument("project"); s.add_argument("--mode", choices=list(MODES), default="proxy")
     s.add_argument("--format", choices=list(FORMATS), help="render another aspect version of the same edit")
     s.add_argument("--cut", help="render only m:ss-m:ss (the short version for TikTok / Reels / Shorts)")
+    s.add_argument("--exact", action="store_true", help="keep --cut points as given (default: snap to the nearest bar)")
     s.add_argument("--encoder", default="auto"); s.add_argument("--jobs", type=int); s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_render)
     s = sub.add_parser("doctor"); s.add_argument("--quick", action="store_true", help="skip the render benchmark")

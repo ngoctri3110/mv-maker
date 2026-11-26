@@ -13,6 +13,8 @@ shots below; edit single shots afterwards.
 | `platforms` | | where it will be posted: `tiktok` `reels` `facebook_reels` `facebook_feed` `shorts` `youtube`, or `all` / `vertical` / `meta` - lyrics move inside the strictest safe zone; `mv review` adds a platform check (`mv platforms`, platforms.md) |
 | `color_match` | 0.6 with a footage preset | match exposure + white balance of every footage layer to the edit's median (0..1 strength; `true` = 0.6, `false` off; per layer `match: false`). `color_target` fixes the exposure (0..1) |
 | `lyric_beat` | | lyrics react to the music: `pulse` (scale pop) or `glow`, or `{mode, every}` (every 2nd beat by default) |
+| `short_cut` | first chorus | `m:ss-m:ss` - the short version `mv deliver` renders for TikTok / Reels / Shorts (snapped to bars) |
+| `audio_fade_in` | 0 | audio fade-in seconds (short cuts get 0.25 automatically) |
 | `loudness` | | integrated LUFS target (e.g. `-14`) - only for a mix far too quiet / loud; finished masters are left alone |
 | `genre` | | cutting grammar for the edit check: `ballad` `pop` `kpop` `rap` `edm` `rock` `indie` `rnb` (`mv genres`, genres.md) |
 | `cut_lead` | 0 | cut picture this much BEFORE each shot boundary: `1f`, `2f` (frames) or seconds (≤ 0.2). Audio/lyrics unchanged |

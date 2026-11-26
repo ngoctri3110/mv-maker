@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-UA = "mv-maker/0.10.0 (+https://github.com/ngoctri3110/mv-maker)"
+UA = "mv-maker/0.11.0 (+https://github.com/ngoctri3110/mv-maker)"
 VIDEO_EXT = (".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi")
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 PROVIDERS = ["pexels", "pixabay", "commons", "openverse", "youtube"]

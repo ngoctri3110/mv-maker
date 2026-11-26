@@ -81,8 +81,11 @@ Make it look like one film: footage presets match colour across sources (`color_
 `focus: auto` (16:9 → 9:16 follows the subject), `fx: [stabilize, denoise]`, `upscale: true`; review's **Footage
 quality** lists over-enlarged sources. Finishing, transitions, velocity, `lyric_beat`, `behind`: `techniques.md`.
 
-**7. Final** (`setup.md`): `mv render <p> --mode final`, plus `--format` versions and `--cut` short versions from the
-platform plan; `mv proof --mode final` to check; deliver `out/*.mp4` + `out/credits.txt`.
+**7. Final + delivery** (`setup.md`): `mv deliver <p>` renders every platform version and the short cut (first chorus,
+cut points on bar lines with audio fades; `short_cut:` or `--cut` to choose), SRT captions, thumbnails (open
+`refs/thumb_candidates.jpg`; redo with `mv thumbnail <p> --at m:ss`), credits + a description draft (write the text in
+the user's language), and runs `mv qa` on every file (black / frozen frames, A/V sync, loudness, limits) →
+`out/deliver.md`. Fix every QA warning before handing over.
 
 ## Rules
 - Times in storyboard = song time. `in:` = time in the ORIGINAL source video (even when only a `section` was downloaded).

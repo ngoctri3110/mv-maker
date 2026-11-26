@@ -105,6 +105,10 @@ tiêu đề tự đặt vào trong), **hook** (hình mạnh nhất trong 1-3 gi�
   **kho clip của bạn** cho mọi shot `layers: auto`, không lặp cảnh; `mv auto --template pop-bright --genre pop` dựng
   sẵn khung shot theo nhịp thể loại.
 - **Dựng nhanh**: cache từng shot, bản nháp 540p, bản cuối dùng x264 / NVENC / QuickSync / AMF / VideoToolbox.
+- **Xuất bản trong một lệnh**: `mv deliver` render mọi bản theo nền tảng và bản cắt ngắn (bắt đầu/kết thúc đúng ô nhịp,
+  có fade âm thanh), xuất phụ đề `.srt`, chọn frame đẹp nhất làm thumbnail YouTube / ảnh bìa dọc kèm tên bài theo font
+  MV, soạn sẵn mô tả có ghi nguồn, và kiểm tra từng file (khung đen, đứng hình, lệch tiếng, độ to, thời lượng so với
+  giới hạn nền tảng).
 - **Tiết kiệm token cho agent**: SKILL.md gọn (~2k token), `mv context` tóm tắt đúng phần cần thay vì đọc cả tài liệu,
   `plan.yaml` ngắn tự bung ra từng shot, `mv proof` (cả bản dựng trong 1 ảnh), `mv status` khi tiếp tục phiên mới, output
   lệnh gọn - giảm khoảng 60-70 % token mỗi MV mà chất lượng giữ nguyên.

@@ -121,6 +121,10 @@ often - [`reference/platforms.md`](skills/mv-maker/reference/platforms.md).
 - **Sourcing helpers**: YouTube search, section-only downloads (yt-dlp), contact sheets with timecodes so the agent can
   *look* at footage and pick in-points, scene-cut detection.
 - **Fast iteration**: per-shot caching, proxy renders (540p), final render with x264, NVENC, QuickSync, AMF or VideoToolbox.
+- **Ready to publish in one command**: `mv deliver` renders each platform version and a short cut that starts and ends
+  on a bar with audio fades, writes SRT captions, picks the best frame for a YouTube thumbnail / vertical cover with the
+  title in the MV's font, drafts the description with credits, and checks every file (black or frozen frames, A/V sync,
+  loudness and true peak, duration vs platform limits).
 - **Token-lean for the agent**: a 2k-token SKILL.md, `mv context` digests instead of whole reference files, a short
   `plan.yaml` expanded into every shot, `mv proof` (the whole edit in one image), `mv status` after a context reset and
   terse command output - roughly 60-70 % fewer tokens per MV at the same quality.
@@ -250,7 +254,9 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 | `mv fetch projects/x` | download sources (direct files capped at 300 MB, YouTube sections via yt-dlp) |
 | `mv sheet projects/x <id>` / `mv scenes projects/x <id>` | contact sheet with timecodes / scene cuts |
 | `mv render projects/x --mode proxy\|final [--encoder h264_nvenc]` | render |
-| `mv platforms [--for tiktok,youtube]` · `mv render projects/x --format 16:9` · `--cut 0:45-1:30` | platform plan · another aspect version · a short cut |
+| `mv platforms [--for tiktok,youtube]` · `mv render projects/x --format 16:9` · `--cut 0:45-1:30` | platform plan · another aspect version · a short cut (snapped to bars, audio fades) |
+| `mv deliver projects/x` | every platform version + short cut + SRT captions + thumbnails + description + QA → `out/deliver.md` |
+| `mv qa projects/x` · `mv thumbnail projects/x [--at m:ss]` · `mv srt projects/x` | check renders (black/frozen frames, sync, loudness) · thumbnail / cover · captions |
 | `mv fonts list\|get\|check\|preview` · `mv palette <img>` | font catalogue, download, coverage, specimen over the poster · artwork colours |
 | `mv demo [name]` | demos |
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.11.0] - 2026-11-26
+
+### Added
+
+- `mv deliver`: every platform version, the short cut (default: from the first chorus), SRT captions, thumbnails,
+  credits + description draft and QA of every file -> `out/deliver.md`.
+- `mv qa`: black / frozen frames (intended dips, freezes and stills are ignored), A/V sync, duration, codec, EBU R128
+  loudness + true peak, platform length limits -> `out/qa.md`.
+- `mv thumbnail`: scores frames from the rendered shots (sharpness, exposure, contrast, colour, faces, chorus) and sets
+  the title in the MV's fonts - 1280x720 YouTube thumbnail or 1080x1920 cover; `refs/thumb_candidates.jpg`, `--at`.
+- `mv srt`: lyrics as SubRip captions (full song or a cut).
+
+### Changed
+
+- `--cut` snaps to the nearest bar line (`--exact` keeps the given points) and fades the audio in / out.
+
+### Fixed
+
+- FFmpeg runs with stdin closed, so a render left behind by a closed terminal cannot spin forever reading the keyboard.
+
 ## [0.10.0] - 2026-11-26
 
 ### Added
