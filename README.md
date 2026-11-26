@@ -35,7 +35,9 @@ animatic for you to approve, finds and downloads source clips, and renders the f
 - **Sourcing helpers**: YouTube search, section-only downloads (yt-dlp), contact sheets with timecodes so the agent can
   *look* at footage and pick in-points, scene-cut detection.
 - **Fast iteration**: per-shot caching, proxy renders (540p), final render with x264, NVENC, QuickSync, AMF or VideoToolbox.
-- **Vietnamese-ready**: Vietnamese font pack (Be Vietnam Pro, Anton, Montserrat, Playfair Display, Dancing Script, Pacifico), Vietnamese docs/prompts.
+- **Any language**: the skill is written in English, the agent talks to you in your language and writes the storyboard
+  in it (`storyboard.md` labels: English / Vietnamese). Font pack covers Latin incl. Vietnamese (Be Vietnam Pro, Anton,
+  Montserrat, Playfair Display, Dancing Script, Pacifico); set any installed font for other scripts.
 
 ## Requirements
 - **FFmpeg** on PATH (Windows: `winget install Gyan.FFmpeg` · macOS: `brew install ffmpeg` · Linux: `apt install ffmpeg`)
@@ -44,6 +46,17 @@ animatic for you to approve, finds and downloads source clips, and renders the f
 
 Python packages (PyYAML, yt-dlp, librosa, faster-whisper, PySceneDetect, OpenCV) and fonts install automatically
 into the skill folder on first run.
+
+### Machine check (`mv doctor`)
+Every machine is different, so on first use the agent runs `mv doctor`: it detects CPU/RAM/GPU/disk, checks the FFmpeg
+build has every filter needed, **test-encodes with each hardware encoder** (NVENC, QuickSync, AMF, VideoToolbox),
+benchmarks a typical MV render and writes `machine.json`. Renders then use the fastest working encoder and Whisper uses
+the right model/device automatically. It also lists optional upgrades - GPU Whisper libraries, driver updates, vocal
+separation (demucs), a newer yt-dlp, a full FFmpeg build - and **the agent asks you before installing anything**.
+```
+Profile   tier=standard · render encoder=h264_qsv · jobs=3 · whisper=medium · ~4.4 min per 4-min 1080p final
+  [optional] demucs: Vocal separation for much better lyric timing ... -> mv doctor --install demucs
+```
 
 ## Install
 
@@ -85,6 +98,7 @@ Talk to the agent, for example:
 
 The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-maker/SKILL.md):
 
+0. **Machine check** - `mv doctor`, you approve any optional installs (first use only)
 1. **Intake** - audio, lyrics, ideas, platform, length
 2. **Analyse** - beats, sections, lyric timing → `analysis.json`, `lyrics.yaml`
 3. **Propose** - song reading, look, ⭐ technique per section + alternatives, lyric styles, "wow moments"
@@ -97,6 +111,7 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 ### CLI (what the agent runs)
 | Command | Does |
 |---|---|
+| `mv doctor [--quick] [--install ids]` | machine check, benchmark, profile, install approved upgrades |
 | `mv new projects/x` | project skeleton (`audio/ sources/ lyrics.txt brief.md storyboard.yaml`) |
 | `mv analyze projects/x [--lyrics]` | tempo, beats, sections (+ Whisper word timing) |
 | `mv align projects/x` | your `lyrics.txt` + Whisper timing → `lyrics.yaml` |
@@ -118,6 +133,7 @@ skills/mv-maker/          the skill (portable: copy/link this folder anywhere)
   reference/              technique catalogue, lyric guide, storyboard schema + template
   scripts/mv.py           CLI + FFmpeg graph builder
   scripts/lyrics.py       lyric styles (ASS), poster layout, lyric alignment
+  scripts/doctor.py       machine check, encoder tests, benchmark, recommendations
   examples/               demo storyboards
   mv, mv.cmd, setup.*     launchers + first-run setup
 .claude-plugin/           Claude Code plugin + marketplace manifest

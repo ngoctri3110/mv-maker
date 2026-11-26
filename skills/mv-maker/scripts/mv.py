@@ -4,6 +4,7 @@
 Run through the launcher next to SKILL.md: `mv` (macOS/Linux/Git-Bash) or `mv.cmd` (Windows).
 
 Subcommands:
+  doctor   [--quick] [--install ids] machine check + benchmark -> machine.json + install recommendations
   demo     [story|blur|lyric-poster|lyric-styles|all]   build + render a demo with synthetic media
   new      <project>                 create a project skeleton
   analyze  <project> [--lyrics]      tempo / beats / sections (+ whisper lyric timing)
@@ -38,6 +39,7 @@ except ImportError:  # pragma: no cover
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lyrics as LY  # noqa: E402
+import doctor as DR  # noqa: E402
 
 # Shot cache key includes the renderer source, so code changes re-render cached shots.
 ENGINE_HASH = hashlib.sha1(b"".join(p.read_bytes() for p in sorted(Path(__file__).resolve().parent.glob("*.py")))).hexdigest()[:10]
@@ -742,12 +744,12 @@ def cmd_new(a):
     tpl = Path(__file__).resolve().parent.parent / "reference" / "storyboard-template.yaml"
     shutil.copy(tpl, sb)
     (root / "brief.md").write_text(
-        "# Brief\n\n- Bài hát / ca sĩ:\n- File audio: audio/\n- Nền tảng & khung hình: 9:16 (TikTok/Reels/Shorts) | 16:9 (YouTube)\n"
-        "- Độ dài: full / cắt 60s (đoạn nào?)\n- Cảm xúc chủ đạo:\n- Ý tưởng theo từng đoạn (intro/verse/chorus/bridge/outro):\n\n"
-        "## Lời bài hát\n\n(dán lời vào đây, mỗi câu một dòng)\n", encoding="utf-8")
+        "# Brief\n\n- Song / artist:\n- Audio file: audio/\n- Platform & aspect: 9:16 (TikTok/Reels/Shorts) | 16:9 (YouTube)\n"
+        "- Length: full song / 60 s cut (which part?)\n- Main emotion:\n- Scene ideas per section (intro/verse/chorus/bridge/outro):\n\n"
+        "## Lyrics\n\n(see lyrics.txt)\n", encoding="utf-8")
     (root / "lyrics.txt").write_text(
-        "# Lời bài hát - mỗi dòng 1 câu đúng như hát (viết đủ cả đoạn lặp lại, không ghi 'ĐK x2').\n"
-        "# [Tên đoạn] để đánh dấu đoạn. 'câu tiếng Việt | translation' để thêm dòng phụ (song ngữ).\n"
+        "# Lyrics - one SUNG line per text line, in singing order; write repeats out in full (no 'Chorus x2').\n"
+        "# [Section] lines mark sections. 'original line | translation' adds a sub-line (bilingual).\n"
         "[Verse 1]\n", encoding="utf-8")
     print(f"[mv] created {root} (audio/, sources/, refs/, brief.md, lyrics.txt, storyboard.yaml)")
 
@@ -799,11 +801,44 @@ def cmd_analyze(a):
     print(f"[mv] wrote {root / 'analysis.json'}")
 
 
+def _expose_pip_cuda_libs():
+    """Make pip-installed NVIDIA libs (mv doctor --install whisper-cuda) visible to CTranslate2."""
+    import site
+    roots = [Path(p) / "nvidia" for p in site.getsitepackages() + [site.getusersitepackages()]]
+    for r in (r for r in roots if r.exists()):
+        if os.name == "nt":
+            for b in r.glob("*/bin"):
+                os.add_dll_directory(str(b))
+                os.environ["PATH"] = str(b) + os.pathsep + os.environ.get("PATH", "")
+        else:
+            import ctypes
+            for so in sorted(r.glob("*/lib/lib*.so*")):
+                if any(k in so.name for k in ("cublas", "cudnn")):
+                    try:
+                        ctypes.CDLL(str(so), mode=ctypes.RTLD_GLOBAL)
+                    except OSError:
+                        pass
+
+
 def whisper_words(audio: Path, model: str, lang: str):
     from faster_whisper import WhisperModel
-    print(f"[mv] whisper {model} (first run downloads the model) ...")
-    wm = WhisperModel(model, device="auto", compute_type="auto")
-    segs, _ = wm.transcribe(str(audio), language=lang, word_timestamps=True, vad_filter=True)
+    prof = DR.load_profile()
+    if model == "auto":
+        model = prof.get("whisper_model", "medium")
+    device = prof.get("whisper_device", "auto")
+    if device != "cpu":
+        _expose_pip_cuda_libs()
+    print(f"[mv] whisper {model} on {device} (first run downloads the model) ...")
+    try:
+        wm = WhisperModel(model, device=device, compute_type="auto")
+        segs, _ = wm.transcribe(str(audio), language=lang, word_timestamps=True, vad_filter=True)
+        segs = list(segs)
+    except (RuntimeError, OSError, ValueError) as e:  # missing CUDA libs etc. -> CPU fallback
+        if device == "cpu":
+            raise
+        print(f"[mv] GPU whisper failed ({str(e)[:120]}) - falling back to CPU int8. Fix with: mv doctor")
+        wm = WhisperModel(model if model != "large-v3" else "medium", device="cpu", compute_type="int8")
+        segs, _ = wm.transcribe(str(audio), language=lang, word_timestamps=True, vad_filter=True)
     out = []
     for s in segs:
         out.append({"start": round(s.start, 2), "end": round(s.end, 2), "text": s.text.strip(),
@@ -915,52 +950,73 @@ def cmd_align(a):
     print(f"[mv] wrote {dst}  (storyboard: lyrics_file: lyrics.yaml)")
 
 
+# storyboard.md is read by the user: labels follow `lang:` in the storyboard (add a language by adding a dict here).
+REVIEW_LABELS = {
+    "en": dict(format="Format", duration="Duration", avg="avg", lyric="Lyrics", style="style", accent="accent",
+               lines="lines", reading="Song reading", look="Overall look", plan="Technique proposals from the song's meaning",
+               meaning="Meaning / emotion", rec="⭐ Recommended", why="Why it fits", other="Other option",
+               wow="Wow moments (the shareable beats)", sources="Footage sources",
+               src_head="| id | Status | Source | Note / rights |", have="✅ file ready", wait="⬇ to download",
+               need="❓ to find", shots_head="| # | Time | Lyric / section | Intent | Technique | Layout | Layers | FX | → Transition |",
+               soft="soft seam", hard="hard cut", alts="Alternatives per shot (pick to swap)",
+               approve="> Approve: reply OK, or give shot id + option to change (e.g. `S03 -> option 2`)."),
+    "vi": dict(format="Khung hình", duration="Thời lượng", avg="trung bình", lyric="Lyric", style="kiểu", accent="màu nhấn",
+               lines="câu", reading="Đọc bài hát", look="Look tổng thể", plan="Đề xuất kỹ thuật theo ý nghĩa bài hát",
+               meaning="Ý nghĩa / cảm xúc", rec="⭐ Đề xuất", why="Vì sao hợp", other="Phương án khác",
+               wow="Khoảnh khắc 'wow' (điểm nhấn để viral)", sources="Nguồn footage",
+               src_head="| id | Trạng thái | Nguồn | Ghi chú / quyền sử dụng |", have="✅ có file", wait="⬇ chờ tải",
+               need="❓ cần tìm", shots_head="| # | Thời gian | Lời / đoạn | Ý đồ | Kỹ thuật | Bố cục | Lớp hình | FX | → Chuyển |",
+               soft="viền mềm", hard="cắt cứng", alts="Phương án thay thế từng shot (chọn để đổi)",
+               approve="> Duyệt: trả lời OK, hoặc ghi số shot + phương án muốn đổi (vd. `S03 -> phương án 2`)."),
+}
+
+
 def cmd_review(a):
     p = Project(a.project)
     p.validate()
     sb = p.sb
+    T = REVIEW_LABELS.get(str(sb.get("lang", "en")).lower()[:2], REVIEW_LABELS["en"])
     s0, e1 = tsec(p.shots[0]["start"]), tsec(p.shots[-1]["end"])
     L = [f"# Storyboard - {sb.get('title', p.root.name)}", "",
-         f"- Khung hình: **{sb.get('format', '9:16')}** · {sb.get('fps', 30)} fps · Audio: `{sb.get('audio')}`",
-         f"- Thời lượng: **{fmt_t(e1 - s0)}** ({fmt_t(s0)} → {fmt_t(e1)}) · {len(p.shots)} shot · "
-         f"trung bình {(e1 - s0) / len(p.shots):.1f}s/shot", ""]
+         f"- {T['format']}: **{sb.get('format', '9:16')}** · {sb.get('fps', 30)} fps · Audio: `{sb.get('audio')}`",
+         f"- {T['duration']}: **{fmt_t(e1 - s0)}** ({fmt_t(s0)} → {fmt_t(e1)}) · {len(p.shots)} shots · "
+         f"{T['avg']} {(e1 - s0) / len(p.shots):.1f}s/shot", ""]
     lines = p.lyric_lines()
     if lines or sb.get("lyric_style"):
-        L += [f"- Lyric: kiểu **{sb.get('lyric_style', 'subtitle')}** · font `{sb.get('font', 'Be Vietnam Pro')}` / "
-              f"`{sb.get('display_font', 'Anton')}` · màu nhấn `{sb.get('accent', '#FFD24D')}` · {len(lines)} câu", ""]
+        L += [f"- {T['lyric']}: {T['style']} **{sb.get('lyric_style', 'subtitle')}** · font `{sb.get('font', 'Be Vietnam Pro')}` / "
+              f"`{sb.get('display_font', 'Anton')}` · {T['accent']} `{sb.get('accent', '#FFD24D')}` · {len(lines)} {T['lines']}", ""]
     if sb.get("concept"):
         L += ["## Concept", "", str(sb["concept"]).strip(), ""]
     if sb.get("song_reading"):
-        L += ["## Đọc bài hát", "", str(sb["song_reading"]).strip(), ""]
+        L += [f"## {T['reading']}", "", str(sb["song_reading"]).strip(), ""]
     if sb.get("look"):
-        L += ["## Look tổng thể", "", str(sb["look"]).strip(), ""]
+        L += [f"## {T['look']}", "", str(sb["look"]).strip(), ""]
     plan = sb.get("technique_plan") or []
     if plan:
-        L += ["## Đề xuất kỹ thuật theo ý nghĩa bài hát", ""]
+        L += [f"## {T['plan']}", ""]
         for n, sec in enumerate(plan, 1):
             L.append(f"### {n}. {sec.get('section', '')}" + (f" - {sec['time']}" if sec.get("time") else ""))
             if sec.get("meaning"):
-                L.append(f"- **Ý nghĩa / cảm xúc:** {sec['meaning']}")
+                L.append(f"- **{T['meaning']}:** {sec['meaning']}")
             if sec.get("recommend"):
-                L.append(f"- **⭐ Đề xuất:** {sec['recommend']}")
+                L.append(f"- **{T['rec']}:** {sec['recommend']}")
             if sec.get("why"):
-                L.append(f"- **Vì sao hợp:** {sec['why']}")
+                L.append(f"- **{T['why']}:** {sec['why']}")
             for o in sec.get("options") or []:
-                L.append(f"- Phương án khác: {o}")
+                L.append(f"- {T['other']}: {o}")
             L.append("")
     wow = sb.get("wow_moments") or []
     if wow:
-        L += ["## Khoảnh khắc 'wow' (điểm nhấn để viral)", ""] + [f"- {w}" for w in wow] + [""]
-    L += ["## Nguồn footage", "", "| id | Trạng thái | Nguồn | Ghi chú / quyền sử dụng |", "|---|---|---|---|"]
+        L += [f"## {T['wow']}", ""] + [f"- {w}" for w in wow] + [""]
+    L += [f"## {T['sources']}", "", T["src_head"], "|---|---|---|---|"]
     for sid, info in p.sources.items():
         info = info or {}
-        have = "✅ có file" if p.source_file(sid) else ("⬇ chờ tải" if info.get("url") else "❓ cần tìm")
+        have = T["have"] if p.source_file(sid) else (T["wait"] if info.get("url") else T["need"])
         src = info.get("url") or info.get("path") or info.get("search") or ""
         if info.get("section"):
             src += f" `[{info['section']}]`"
         L.append(f"| `{sid}` | {have} | {src} | {info.get('note', '')} {('· ' + info['rights']) if info.get('rights') else ''} |")
-    L += ["", "## Shot list", "", "| # | Thời gian | Lời / đoạn | Ý đồ | Kỹ thuật | Bố cục | Lớp hình | FX | → Chuyển |",
-          "|---|---|---|---|---|---|---|---|---|"]
+    L += ["", "## Shot list", "", T["shots_head"], "|---|---|---|---|---|---|---|---|---|"]
     for sh in p.shots:
         lay = []
         for ly in sh.get("layers") or []:
@@ -978,7 +1034,7 @@ def cmd_review(a):
         layout = sh.get("layout", "full")
         if layout in ("split_v", "split_h"):
             fv = sh.get("feather", DEFAULT_FEATHER)
-            layout += f" (viền mềm {fv})" if fv else " (cắt cứng)"
+            layout += f" ({T['soft']} {fv})" if fv else f" ({T['hard']})"
         fx = list(map(str, sh.get("fx") or [])) + [f"beat-{b}" for b in sh.get("beat_fx") or []]
         tech = ", ".join(f"`{t}`" for t in sh.get("technique") or [])
         if sh.get("lyric_style"):
@@ -987,8 +1043,8 @@ def cmd_review(a):
                  f"{tech} | {layout} | {'<br>'.join(lay)} | {'+'.join(fx)} | {sh.get('transition', 'cut')} |")
     alts = [(sh["id"], a) for sh in p.shots for a in sh.get("alt") or []]
     if alts:
-        L += ["", "## Phương án thay thế từng shot (chọn để đổi)", ""] + [f"- **{i}:** {a}" for i, a in alts]
-    L += ["", "> Duyệt: trả lời OK, hoặc ghi số shot + phương án muốn đổi (vd. `S03 -> dùng phương án 2`)."]
+        L += ["", f"## {T['alts']}", ""] + [f"- **{i}:** {a}" for i, a in alts]
+    L += ["", T["approve"]]
     out = p.root / "storyboard.md"
     out.write_text("\n".join(L) + "\n", encoding="utf-8")
     print(f"[mv] wrote {out}")
@@ -1052,11 +1108,27 @@ def cmd_scenes(a):
         print(f"{n:3d}  {fmt_t(s.get_seconds() + off)} - {fmt_t(e.get_seconds() + off)}  ({e.get_seconds() - s.get_seconds():.1f}s)")
 
 
+def cmd_doctor(a):
+    if a.install:
+        DR.install([x.strip() for x in a.install.split(",") if x.strip()])
+    d = DR.build(run_bench=not a.quick)
+    if a.json:
+        print(json.dumps(d, ensure_ascii=False, indent=1))
+    else:
+        DR.print_report(d)
+
+
 def cmd_render(a):
     p = Project(a.project)
     p.validate()
-    jobs = a.jobs or max(1, (os.cpu_count() or 4) // 4)
-    r = Renderer(p, a.mode, a.encoder, jobs, a.force)
+    prof = DR.load_profile()
+    jobs = a.jobs or prof.get("jobs") or max(1, (os.cpu_count() or 4) // 4)
+    enc = a.encoder
+    if enc == "auto":
+        enc = prof.get("encoder", "libx264")
+        if a.mode == "final":
+            print(f"[mv] encoder auto -> {enc}" + ("" if DR.PROFILE.exists() else " (run `mv doctor` to detect GPU encoders)"))
+    r = Renderer(p, a.mode, enc, jobs, a.force)
     out = r.run_all()
     print(f"[mv] done -> {out}")
 
@@ -1071,13 +1143,13 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("new"); s.add_argument("project"); s.set_defaults(fn=cmd_new)
     s = sub.add_parser("analyze"); s.add_argument("project"); s.add_argument("--audio")
-    s.add_argument("--lyrics", action="store_true"); s.add_argument("--model", default="medium")
+    s.add_argument("--lyrics", action="store_true"); s.add_argument("--model", default="auto")
     s.add_argument("--language", default="vi"); s.add_argument("--sections", type=int); s.set_defaults(fn=cmd_analyze)
     s = sub.add_parser("review"); s.add_argument("project"); s.set_defaults(fn=cmd_review)
     s = sub.add_parser("fonts"); s.set_defaults(fn=cmd_fonts)
     s = sub.add_parser("demo"); s.add_argument("name", nargs="?", default="story", choices=DEMOS + ["all"])
     s.add_argument("--dir", default="projects"); s.add_argument("--mode", choices=list(MODES), default="proxy")
-    s.add_argument("--encoder", default="libx264"); s.add_argument("--force", action="store_true")
+    s.add_argument("--encoder", default="auto"); s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_demo)
     s = sub.add_parser("align"); s.add_argument("project"); s.add_argument("--start"); s.add_argument("--end")
     s.set_defaults(fn=cmd_align)
@@ -1088,8 +1160,11 @@ def main():
     s.add_argument("--rows", type=int, default=6); s.set_defaults(fn=cmd_sheet)
     s = sub.add_parser("scenes"); s.add_argument("project"); s.add_argument("source"); s.set_defaults(fn=cmd_scenes)
     s = sub.add_parser("render"); s.add_argument("project"); s.add_argument("--mode", choices=list(MODES), default="proxy")
-    s.add_argument("--encoder", default="libx264"); s.add_argument("--jobs", type=int); s.add_argument("--force", action="store_true")
+    s.add_argument("--encoder", default="auto"); s.add_argument("--jobs", type=int); s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_render)
+    s = sub.add_parser("doctor"); s.add_argument("--quick", action="store_true", help="skip the render benchmark")
+    s.add_argument("--json", action="store_true"); s.add_argument("--install", help="comma-separated recommendation ids")
+    s.set_defaults(fn=cmd_doctor)
     a = ap.parse_args()
     a.fn(a)
 

@@ -16,6 +16,5 @@ if [ -x .venv/bin/python ]; then VPY=.venv/bin/python; else VPY=.venv/Scripts/py
 "$VPY" -m pip install --upgrade pip -q
 "$VPY" -m pip install -r requirements.txt -q
 "$VPY" scripts/mv.py fonts
-echo "[mv] hardware encoders available:"
-ffmpeg -hide_banner -encoders 2>/dev/null | grep -E "nvenc|qsv|amf|videotoolbox" || true
+"$VPY" scripts/mv.py doctor
 echo "[mv] ready. Try:  $(pwd)/mv demo story"

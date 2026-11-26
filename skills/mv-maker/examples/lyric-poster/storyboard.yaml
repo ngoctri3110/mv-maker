@@ -1,14 +1,16 @@
+# Poster-player lyric video. The demo song is Vietnamese to show diacritics; swap in your own poster + lyrics.
 title: "Mùa Hè Của Em - Lyric Video"
 slug: muahe-lyric
+lang: en
 audio: audio/song.mp3
-format: "9:16"
+format: "9:16"            # "16:9" puts the cover left and the lyrics right (YouTube)
 fps: 30
-accent: "#FFB86B"
+accent: "#FFB86B"         # pick from the poster's brightest highlight
 lyrics_file: lyrics.yaml
 lyric_style: scroll
 lyric_highlight: karaoke
-poster: {title: "Mùa Hè Của Em", artist: "Ca sĩ Demo", progress: true, visualizer: wave}
+poster: {title: "Mùa Hè Của Em", artist: "Demo Artist", progress: true, visualizer: wave}
 sources:
-  poster: {note: "Poster bài hát (thay bằng sources/poster.jpg của bạn)"}
+  poster: {note: "Song poster (replace with your sources/poster.jpg)"}
 shots:
   - {id: P01, start: 0, end: 24, layout: poster, layers: [{src: poster, zoom: in, zoom_amount: 0.04}]}

@@ -16,6 +16,5 @@ if (-not (Test-Path .venv\Scripts\python.exe)) { & ([scriptblock]::Create("$py -
 .\.venv\Scripts\python.exe -m pip install --upgrade pip -q
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt -q
 .\.venv\Scripts\python.exe scripts\mv.py fonts
-Write-Host "`n[mv] hardware encoders available:"
-ffmpeg -hide_banner -encoders 2>$null | Select-String "nvenc|qsv|amf|videotoolbox"
+.\.venv\Scripts\python.exe scripts\mv.py doctor
 Write-Host "`n[mv] ready. Try:  $PSScriptRoot\mv.cmd demo story"

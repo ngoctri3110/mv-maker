@@ -4,8 +4,8 @@ Lyrics are a design element, not an afterthought. Pick the style from the song's
 then keep it consistent per section. Propose 2 options to the user (see SKILL.md step 3) with a one-line reason.
 
 ## Pipeline
-1. `lyrics.txt` - one SUNG line per text line, in singing order, repeats written out (no "ĐK x2").
-   `[Chorus]` headers mark sections. `câu tiếng Việt | English line` adds a translation sub-line.
+1. `lyrics.txt` - one SUNG line per text line, in singing order, repeats written out (no "Chorus x2").
+   `[Chorus]` headers mark sections. `original line | translated line` adds a translation sub-line.
 2. `mv analyze <p> --lyrics` - Whisper word timestamps (approximate on sung vocals; use a demucs vocal stem if poor).
 3. `mv align <p>` - maps YOUR lyric text onto Whisper timing -> `lyrics.yaml` (per-word `[word, start, end]`).
    Reports the % of words matched; < 50 % means wrong order/repeats or noisy transcription.
@@ -20,7 +20,7 @@ then keep it consistent per section. Propose 2 options to the user (see SKILL.md
 | `subtitle` | Clean line, fade (or `lyric_anim: rise/pop`) | Story MV, ballad verses, cinematic edits | Least distracting; supports bilingual `sub` line |
 | `karaoke` | Line visible, words fill with the accent colour as sung | Sing-along, fan edits, chorus, TikTok trends | Needs good word timing; accent = brand colour of the MV |
 | `word` | Words appear one by one as sung | Rap, spoken parts, emotional slow lines | Strong pull on attention - use for 1-2 sections |
-| `typewriter` | Characters type in | Letters / confessions / "nhắn tin" mood, intros, storytelling | Feels personal; pair with blur/bw background |
+| `typewriter` | Characters type in | Letters / confessions / text-message mood, intros, storytelling | Feels personal; pair with blur/bw background |
 | `stack` | BIG uppercase words stacked centre, popping in, longest row in accent | Hook, drop, chorus, viral edits, text-led videos | Display font (Anton). 2-5 words per line work best |
 | `neon` | Glow outline in accent colour, flicker-in | Night city, EDM, retro 80s, love songs at night | Needs dark background (`fx: [bright:-0.3]`) |
 | `scroll` | Apple-Music style list: current line bright, neighbours dim, scrolls up | Lyric videos, poster players, "full lyric" uploads | `lyric_highlight: karaoke` fills the current line word by word |
@@ -39,7 +39,7 @@ never more than 3 styles in one MV. Captions (`caption:`) remain for titles/cred
 - Keep backgrounds low-contrast: `fx: [blur:10, bright:-0.25]`, or `fit_blur`.
 - One accent colour taken from the cover/poster.
 
-### C. Poster player (cover + lyric panel) - "từ 1 poster ra video lyric"
+### C. Poster player (cover + lyric panel) - one poster image → lyric video
 `layout: poster` turns one image (or video) into a music-player style video:
 blurred cover fills the background, sharp cover card with shadow, title + artist, audio visualizer,
 progress bar with elapsed/total time, and a scrolling lyric panel.
@@ -53,7 +53,7 @@ accent: "#FFB86B"
 lyrics_file: lyrics.yaml
 lyric_style: scroll
 lyric_highlight: karaoke   # or line
-poster: {title: "Tên bài", artist: "Ca sĩ", progress: true, time: true, visualizer: wave, visualizer_color: "#FFFFFF"}
+poster: {title: "Song title", artist: "Artist", progress: true, time: true, visualizer: wave, visualizer_color: "#FFFFFF"}
 sources:
   poster: {path: sources/poster.jpg}
 shots:
@@ -69,7 +69,7 @@ Variants: split the song into several poster shots (e.g. swap to a second artwor
 | Anton | Tall condensed display | `stack`, titles, hooks (uppercase) |
 | Montserrat | Geometric, clean | pop/EDM subtitles |
 | Playfair Display | Elegant serif | ballad, bolero, romantic, cinematic titles |
-| Dancing Script / Pacifico | Handwritten | love songs, "nhật ký", acoustic - short lines only |
+| Dancing Script / Pacifico | Handwritten | love songs, diary mood, acoustic - short lines only |
 Set `font:` (lyrics) and `display_font:` (stack) in the storyboard; always use fonts with Vietnamese glyphs.
 
 Readability rules

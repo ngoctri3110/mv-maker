@@ -1,6 +1,6 @@
 ---
 name: mv-maker
-description: Turn a song (audio + lyrics + the user's scene ideas, or just a cover/poster image) into a music video or lyric video for TikTok/Reels/Shorts/YouTube - beat/lyric analysis, lyric timing, technique proposals from the song's meaning, storyboard for approval, sourcing clips from YouTube/TikTok, and FFmpeg rendering with soft split-screens, overlays, film looks, beat-synced effects, animated lyric styles (karaoke, kinetic stack, neon, scrolling) and poster-player lyric videos. Use when the user wants an MV, lyric video, fan edit, "video lyric từ poster", or "ghép clip theo lời bài hát".
+description: Turn a song (audio + lyrics + the user's scene ideas, or just a cover/poster image) into a music video or lyric video for TikTok/Reels/Shorts/YouTube - beat/lyric analysis, lyric timing, technique proposals from the song's meaning, storyboard for approval, sourcing clips from YouTube/TikTok, and FFmpeg rendering with soft split-screens, overlays, film looks, beat-synced effects, animated lyric styles (karaoke, kinetic stack, neon, scrolling) and poster-player lyric videos. Use when the user wants a music video, lyric video, fan edit, a lyric video from a poster/cover image, or to cut clips to a song - in any language.
 ---
 
 # MV Maker
@@ -10,7 +10,7 @@ executes it deterministically. Never download footage or render a final before t
 
 **Tool.** `SKILL_DIR` = the folder containing this SKILL.md (in Claude Code: `${CLAUDE_SKILL_DIR}`).
 Run `SKILL_DIR/mv <cmd>` on macOS/Linux/Git-Bash or `SKILL_DIR\mv.cmd <cmd>` on Windows - below, `mv` means that.
-The first run installs everything into `SKILL_DIR/.venv` (Python deps + Vietnamese font pack); it needs
+The first run installs everything into `SKILL_DIR/.venv` (Python deps + font pack); it needs
 FFmpeg on PATH and Python 3.10+. If setup fails, tell the user the exact missing prerequisite.
 Projects live in the user's working directory: `projects/<slug>/` (audio, sources, storyboard, outputs).
 New user / "does it work?" → `mv demo story` (also `blur`, `lyric-poster`, `lyric-styles`, `all`) renders a demo
@@ -24,7 +24,26 @@ References (read when needed):
   MV-with-lyrics vs lyric video vs **poster player** (one cover image -> lyric video), fonts, readability rules
 - `reference/storyboard-template.yaml` - worked example of every layout
 
-## Workflow (8 steps, 2 approval gates)
+**Language.** These instructions are in English, but talk to the user in *their* language and write everything they
+read in it: chat summaries, `storyboard.yaml` text fields (`intent`, `note`, `song_reading`, `technique_plan`, `alt`,
+captions) and therefore `storyboard.md` (also set `lang:` so its headings match). Lyrics stay exactly as sung. Pick fonts that cover the lyric language.
+
+## Workflow (machine check + 8 steps, approval gates)
+
+### 0. Machine check -> GATE 0 (first use on a machine, or when `SKILL_DIR/machine.json` is missing / > 30 days old)
+Run `mv doctor` (~10 s: hardware, FFmpeg features, encoders that actually work, Python deps, render benchmark).
+It writes `machine.json`; `render` (`--encoder auto`) and `analyze` (`--model auto`) then use the best settings found.
+Report to the user in their language, briefly:
+- a small table: CPU / RAM / GPU / disk, chosen encoder, Whisper model + device, tier (light / standard / strong)
+  and the estimated time for a 4-minute 1080p final;
+- what that means for the plan (e.g. tier light → storyboard + proxies here, final on a stronger machine);
+- the recommendations grouped **required / recommended / optional**, each with what it improves, size/time cost and
+  whether it is automatic (`mv doctor --install <id>`) or a manual system step (driver, FFmpeg, app).
+Then **ask which ones to install** (multi-select; required items first). **Never install anything, change drivers or
+system packages without an explicit yes.** Install the approved automatic items with `mv doctor --install id1,id2`;
+for approved manual items run the shown system command (e.g. `winget`, `brew`, `apt`) or guide the user, then re-run
+`mv doctor` and confirm. If the user declines, continue with what works (everything has a CPU fallback).
+Re-run `mv doctor` whenever a render/encode or Whisper step fails with a hardware/driver error.
 
 ### 1. Intake
 `mv new projects/<slug>` then collect into `brief.md`: audio file (put in `audio/`), full lyrics, the user's
@@ -36,12 +55,14 @@ If the user only has a poster/cover image, propose C (and B as an upgrade if the
 
 ### 2. Analyze the song + time the lyrics
 `mv analyze projects/<slug> --lyrics` -> `analysis.json`: tempo, beat times, downbeats, energy sections,
-and Whisper word timestamps (`--model medium`, CPU OK; `large-v3` on a GPU machine). Whisper on sung
+and Whisper word timestamps (`--model auto` picks from `machine.json`: `large-v3` on CUDA, else `medium`/`small`;
+`--language` = the song's language code, default `vi`). Whisper on sung
 vocals is approximate: align the user's real lyrics to those timestamps, don't trust Whisper's text.
 If timing is poor, isolate vocals first (`demucs --two-stems vocals audio/song.mp3`) and pass `--audio` the vocal stem.
 Put the user's lyrics in `lyrics.txt` (one sung line per line, repeats written out), then `mv align projects/<slug>`
 -> `lyrics.yaml` with per-word timing. Report the match % and spot-check a few lines against the audio.
-First time on a machine also run `mv fonts` (Vietnamese font pack).
+The font pack (`mv fonts`) is installed by setup; it covers Latin incl. Vietnamese. For other scripts (CJK, Thai,
+Arabic...) set `font:` to an installed font that supports them.
 
 ### 3. Read the song & propose techniques -> part of GATE 1
 Before choosing shots, interpret the song and turn meaning into edit ideas. The user should come away with
@@ -50,8 +71,8 @@ ideas they would not have thought of - not just their own description played bac
    (intro → verse → pre → chorus → bridge → outro), key images/metaphors in the lyrics, the 1-2 lines that matter most.
 2. **Look** (`look:`): one overall palette + one signature technique + one visual motif (S-MOTIF) that ties the MV together.
 3. **Per-section proposals** (`technique_plan:`): for every section give `meaning`, a ⭐ `recommend` combo of technique IDs
-   from `reference/techniques.md`, `why` (one line linking it to the lyric/emotion - "câu 'ngày xưa ấy' → nửa trên mờ ấm
-   vì là ký ức"), and 1-2 `options` that feel different (e.g. softer vs. punchier).
+   from `reference/techniques.md`, `why` (one line linking it to the lyric/emotion - e.g. "the line 'back in those days'
+   → top half blurred and warm because it is a memory"), and 1-2 `options` that feel different (softer vs. punchier).
 4. **Lyric treatment**: pick `lyric_style` per section from `reference/lyrics.md` (calm verse vs loud chorus),
    font pairing (`font` / `display_font`) and `accent` colour (from the poster or the MV palette). Offer one
    alternative style for the chorus. For poster videos also choose 9:16 vs 16:9 and visualizer on/off.
@@ -59,8 +80,7 @@ ideas they would not have thought of - not just their own description played bac
    the drop into the first chorus, the most important lyric line).
 6. Respect the user's own ideas first; propose techniques that make them land harder, and add alternatives around them.
    House style: splits use soft seams (feather 0.2) unless hard contrast is the point.
-7. Each shot gets `technique: [IDs]` and, where a real choice exists, `alt: ["phương án 2: ..."]`.
-Write all user-facing text in the user's language (Vietnamese for this user).
+7. Each shot gets `technique: [IDs]` and, where a real choice exists, `alt: ["option 2: ..."]`.
 
 ### 4. Storyboard -> GATE 1
 Write `storyboard.yaml`:
@@ -72,7 +92,7 @@ Write `storyboard.yaml`:
 Then `mv review projects/<slug>` -> `storyboard.md`, and `mv render projects/<slug> --mode proxy` -> an
 **animatic** (missing footage shows as labelled cards, real audio + captions + transitions).
 Show the user `storyboard.md` + the animatic path, and summarise in chat: the song reading in 2-3 lines,
-the ⭐ recommendation per section, the wow moments, and how to pick alternatives (`S03 -> phương án 2`).
+the ⭐ recommendation per section, the wow moments, and how to pick alternatives (e.g. `S03 -> option 2`).
 **Stop and wait for approval / changes.**
 
 ### 5. Source footage -> GATE 2
@@ -92,8 +112,9 @@ Check by extracting frames (`ffmpeg -ss <t> -i out/... -frames:v 1 x.jpg`) and l
 
 ### 8. Final render (strong machine)
 Install the skill on the render machine, copy `projects/<slug>` (incl. `audio/`, `sources/`, `analysis.json`,
-`lyrics.yaml`), then `mv render projects/<slug> --mode final --encoder h264_nvenc` (NVIDIA) / `h264_qsv` (Intel) /
-`h264_videotoolbox` (Mac) / `libx264` (CPU, best quality).
+`lyrics.yaml`), then `mv doctor` on that machine, then `mv render projects/<slug> --mode final` (encoder auto = fastest working one).
+For maximum quality when time allows: `--encoder libx264`. Explicit choices: `h264_nvenc` (NVIDIA), `h264_qsv` (Intel),
+`h264_amf` (AMD), `h264_videotoolbox` (Mac).
 Output: `projects/<slug>/out/<slug>_final_<aspect>.mp4`. For a 16:9 YouTube version, copy the storyboard, set
 `format: "16:9"`, re-check `focus`/captions, render again.
 

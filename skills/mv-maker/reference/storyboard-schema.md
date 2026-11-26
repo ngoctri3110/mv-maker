@@ -4,6 +4,7 @@
 | field | default | meaning |
 |---|---|---|
 | `title`, `slug`, `concept` | | display / output name / one-paragraph idea (shown in storyboard.md) |
+| `lang` | en | language of the `storyboard.md` labels (`en`, `vi`; others fall back to `en`) - set to the user's language |
 | `audio` | | song file, relative to project folder |
 | `format` | `9:16` | `9:16` 1080x1920 · `16:9` 1920x1080 · `1:1` · `4:5` |
 | `fps` | 30 | final fps (proxy always 24) |

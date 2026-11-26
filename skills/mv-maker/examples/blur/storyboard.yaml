@@ -1,70 +1,77 @@
-title: "Demo: chồng mờ 2 video & chia đôi blur"
+title: "Demo: blending two videos & blurred splits"
 slug: blur-demo
+lang: en
 audio: audio/song.mp3
 format: "9:16"
 fps: 30
 fade_out: 0.8
 concept: |
-  5 biến thể cho cùng 2 video A (sọc màu = vai ca sĩ) và B (fractal = vai fan cầm lightstick).
+  Five variants for the same two videos: A (colour bars, playing the singer) and B (fractal, playing fans with lightsticks).
 
 sources:
-  A: {note: "Video A - ca sĩ"}
-  B: {note: "Video B - fan lightstick"}
-  C: {note: "Ảnh kỷ niệm"}
+  A: {note: "Video A - singer"}
+  B: {note: "Video B - fans with lightsticks"}
+  C: {note: "Keepsake photo"}
 
 shots:
   - id: V1
     start: 0
     end: 5
-    intent: "Chồng mờ (double exposure): A rõ, B mờ nhòe đè lên kiểu screen 50%"
+    intent: "Double exposure: A sharp, B blurred on top in screen mode at 50 %"
+    technique: [C-DOUBLE-EXPO]
     layers:
       - {src: A, in: 0}
       - {src: B, in: 0, blend: screen, opacity: 0.5, fx: [blur:10]}
-    caption: "1 · Chồng mờ: A + B nhòe (screen)"
+    caption: "1 · Double exposure: A + blurred B (screen)"
     transition: dissolve:0.6
 
   - id: V2
     start: 5
     end: 10
-    intent: "Hai video hoà đều 50/50, cả hai hơi nhòe + glow -> cảm giác mơ/hồi tưởng"
+    intent: "Both videos mixed 50/50, slightly blurred + glow -> dreamy / reminiscing"
+    technique: [C-DREAM-MIX]
     layers:
       - {src: A, in: 10, fx: [blur:4, warm]}
       - {src: B, in: 10, blend: normal, opacity: 0.5, fx: [blur:4]}
     fx: [glow:0.5, grain:8]
-    caption: "2 · Hoà 50/50 + glow (hồi tưởng)"
+    caption: "2 · 50/50 mix + glow (reminiscing)"
     transition: dissolve:0.6
 
   - id: V3
     start: 10
     end: 15
-    intent: "Chia đôi cắt cứng: trên A blur, dưới B rõ"
+    intent: "Hard split: A blurred on top, B sharp below"
+    technique: [C-SPLIT-HARD]
     layout: split_v
+    feather: 0
     layers:
       - {src: A, in: 20, fx: [blur:12]}
       - {src: B, in: 20}
-    caption: "3 · Chia đôi: trên A blur / dưới B"
+    caption: "3 · Hard split: blurred A / B"
     transition: dissolve:0.6
 
   - id: V4
     start: 15
     end: 20
-    intent: "Chia đôi đường ghép mềm (feather): 2 nửa tan vào nhau"
+    intent: "Soft-seam split (feather): the halves melt into each other"
+    technique: [C-SPLIT-SOFT]
     layout: split_v
     feather: 0.25
     layers:
       - {src: A, in: 30, fx: [blur:12]}
       - {src: B, in: 30}
-    caption: "4 · Chia đôi viền mềm (feather)"
+    caption: "4 · Soft-seam split (feather)"
     transition: dissolve:0.6
 
   - id: V5
     start: 20
     end: 25
-    intent: "Feather + ảnh kỷ niệm chồng mờ toàn khung (3 lớp)"
+    intent: "Soft split + keepsake photo over the whole frame (3 layers)"
+    technique: [C-SPLIT-SOFT, C-SOFTLIGHT]
     layout: split_v
     feather: 0.25
     layers:
       - {src: A, in: 40, fx: [blur:8, vintage]}
       - {src: B, in: 30, fx: [glow]}
       - {src: C, blend: softlight, opacity: 0.45, zoom: in}
-    caption: "5 · Viền mềm + ảnh kỷ niệm phủ mờ"
+    caption: "5 · Soft split + keepsake overlay"

@@ -1,145 +1,145 @@
-# storyboard.yaml - single source of truth for the MV. Human approves this (via storyboard.md + animatic)
+# storyboard.yaml - single source of truth for the MV. The user approves it (via storyboard.md + animatic)
 # BEFORE any footage is downloaded. Field reference: reference/storyboard-schema.md
-# Technique IDs: reference/techniques.md
-title: "Tên bài hát - MV"
+# Technique IDs: reference/techniques.md. Write the text fields in the user's language and set `lang`.
+title: "Song Title - MV"
 slug: my-song
+lang: en                    # labels of storyboard.md: en | vi
 audio: audio/song.mp3
 format: "9:16"
 fps: 30
-font: Arial
 song_start: 0
 fade_out: 1.2
 audio_fade_out: 0
 caption_anim: fade
 
 concept: |
-  Hành trình mở cánh cửa trở về ký ức: từ hiện tại (sân khấu, fan) quay về những ngày ngồi đàn,
-  để rồi điệp khúc là hiện tại và quá khứ hoà làm một.
+  A journey through a door back into memory: from the present (stage, fans) back to the days of
+  playing the piano, until the chorus fuses present and past into one.
 
 song_reading: |
-  - Chủ đề: nỗi nhớ những ngày đầu, biết ơn người đã đồng hành.
-  - Mạch cảm xúc: intro tò mò → verse hoài niệm → điệp khúc bùng nổ, ấm áp → kết lắng lại.
-  - Câu đắt nhất: câu mở đầu (mở cửa) và câu hook điệp khúc.
+  - Theme: missing the early days, gratitude to the people who came along.
+  - Emotional arc: curious intro → nostalgic verse → bursting, warm chorus → quiet ending.
+  - Key lines: the opening line (the door opens) and the chorus hook.
 
 look: |
-  Palette: phim ấm (L-WARM-FILM) cho ký ức, sáng glow (L-GLOW) cho sân khấu.
-  Kỹ thuật chữ ký: C-SPLIT-SOFT - ca sĩ ở trên, fan ở dưới, hai nửa tan vào nhau.
-  Motif (S-MOTIF): cánh cửa - mở ở đầu MV, khép lại ở cuối.
+  Palette: warm film (L-WARM-FILM) for memories, bright glow (L-GLOW) for the stage.
+  Signature technique: C-SPLIT-SOFT - singer on top, fans below, the halves melting together.
+  Motif (S-MOTIF): the door - opens at the start of the MV, closes at the end.
 
 technique_plan:
   - section: Intro
     time: "0:00-0:04"
-    meaning: "Bước vào câu chuyện"
-    recommend: "S-HOOK-3S + zoom-in bay tới cửa + X-CIRCLE/flash đúng âm tiết đầu tiên"
-    why: "Cửa mở = mở ký ức; flash đúng câu đầu giữ chân người xem TikTok trong 3 giây đầu"
-    options: ["X-MATCH-CUT: tay đẩy cửa → cắt sang cảnh xưa đang mở cửa", "C-FIT-BLUR nếu cảnh bay là 16:9"]
+    meaning: "Stepping into the story"
+    recommend: "S-HOOK-3S + zoom-in flight to the door + X-CIRCLE/flash on the first sung syllable"
+    why: "Door opening = opening the memory; a flash right on the first line holds TikTok viewers in the first 3 s"
+    options: ["X-MATCH-CUT: hand pushes the door → cut to an old scene of a door opening", "C-FIT-BLUR if the flight shot is 16:9"]
   - section: Verse 1
     time: "0:04-0:15"
-    meaning: "Hồi tưởng, ngày xưa ngồi đàn"
-    recommend: "L-WARM-FILM + C-DOUBLE-EXPO (ảnh kỷ niệm phủ mờ) → C-SPLIT-SOFT ca sĩ/fan"
-    why: "Lời đang kể chuyện cũ nên hình mờ ấm; chia đôi viền mềm = hiện tại và kỷ niệm chạm nhau"
-    options: ["L-VHS cho cảm giác clip gia đình 90s", "C-PIP: sân khấu lớn, cảnh xưa ở góc"]
+    meaning: "Reminiscing, playing the piano long ago"
+    recommend: "L-WARM-FILM + C-DOUBLE-EXPO (keepsake photo overlay) → C-SPLIT-SOFT singer/fans"
+    why: "The lyrics tell an old story, so the image is soft and warm; the soft split = present and memory touching"
+    options: ["L-VHS for a 90s home-video feel", "C-PIP: big stage, old scene in the corner"]
   - section: Chorus
     time: "0:15-0:20"
-    meaning: "Bùng nổ, biển lightstick"
-    recommend: "R-FLASH-DROP vào điệp khúc + R-ZOOM-PULSE + R-BEAT-FLASH + K-POP"
-    why: "Lightstick nhấp nháy theo nhịp - cho khung hình 'đập' cùng beat như đang ở concert"
-    options: ["Bản nhẹ hơn: chỉ R-BEAT-CUT + L-GLOW", "Bản mạnh hơn: thêm R-SHAKE 2 giây đầu"]
+    meaning: "Explosion, a sea of lightsticks"
+    recommend: "R-FLASH-DROP into the chorus + R-ZOOM-PULSE + R-BEAT-FLASH + K-POP"
+    why: "Lightsticks blink on the beat - make the frame pulse with it like being at the concert"
+    options: ["Softer: only R-BEAT-CUT + L-GLOW", "Punchier: add R-SHAKE for the first 2 s"]
   - section: Outro
     time: "0:20-0:24"
-    meaning: "Lắng lại, biết ơn"
+    meaning: "Settling down, gratitude"
     recommend: "R-SLOWMO + L-GLOW + K-TITLE + X-DIP-BLACK"
-    why: "Kết chậm để câu cuối đọng lại"
-    options: ["S-MOTIF: cánh cửa khép lại thay cho fan"]
+    why: "A slow ending lets the last line linger"
+    options: ["S-MOTIF: the door closes instead of the fans shot"]
 
 wow_moments:
-  - "0:04 - cửa mở + flash trắng đúng âm tiết đầu tiên"
-  - "0:15 - vào điệp khúc: flash + zoom nảy theo từng beat với biển lightstick"
+  - "0:04 - the door opens + white flash exactly on the first syllable"
+  - "0:15 - into the chorus: flash + zoom pulses on every beat over the sea of lightsticks"
 
 sources:
   door_fly:
     search: "drone fly through door FPV"
-    note: "Cảnh bay thẳng tới cánh cửa và mở ra"
-    rights: "cần xác minh"
+    note: "Camera flies straight at a door that opens"
+    rights: "to verify"
   old_piano:
-    note: "Cảnh xưa: người ngồi đàn, phim cũ"
+    note: "Old footage: someone playing the piano, old film look"
   singer_live:
-    note: "Ca sĩ hát live cận mặt"
+    note: "Singer performing live, close-up"
     # url: https://www.youtube.com/watch?v=XXXX
     # section: "1:20-2:40"   # `in` below still uses ORIGINAL video time
   fans_light:
-    note: "Fan vẫy lightstick theo nhịp"
+    note: "Fans waving lightsticks to the beat"
   memory_overlay:
-    note: "Ảnh/clip kỷ niệm để chồng mờ"
+    note: "Keepsake photo/clip to overlay"
 
 shots:
   - id: S01
     start: 0
     end: 4.0
     section: intro
-    intent: "Camera lao thẳng tới cửa, cửa mở đúng câu hát đầu"
+    intent: "Camera rushes at the door, the door opens on the first sung line"
     technique: [S-HOOK-3S, X-DIP-WHITE]
     layout: full
     layers:
       - {src: door_fly, in: 0, zoom: in, fx: [warm]}
     transition: flash
-    alt: ["X-MATCH-CUT sang cảnh xưa cũng đang mở cửa"]
+    alt: ["X-MATCH-CUT to an old scene where a door also opens"]
 
   - id: S02
     start: 4.0
     end: 9.0
-    lyric: "câu hát 1"
-    intent: "Ký ức ùa về: ngồi đàn, ảnh cũ phủ mờ"
+    lyric: "lyric line 1"
+    intent: "Memories flood back: piano playing, old photo overlay"
     technique: [L-WARM-FILM, C-DOUBLE-EXPO, K-RISE]
     layout: full
     layers:
       - {src: old_piano, in: 0, fx: [vintage, grain], zoom: in}
       - {src: memory_overlay, in: 0, blend: screen, opacity: 0.35, fx: [blur:8]}
-    caption: "câu hát 1"
+    caption: "lyric line 1"
     caption_anim: rise
     transition: dissolve:0.6
-    alt: ["L-VHS thay cho phim ấm"]
+    alt: ["L-VHS instead of warm film"]
 
   - id: S03
     start: 9.0
     end: 15.0
-    lyric: "câu hát 2 (hoài niệm)"
-    intent: "Trên: ca sĩ hát · Dưới: fan vẫy lightstick, hai nửa tan vào nhau"
+    lyric: "lyric line 2 (nostalgic)"
+    intent: "Top: singer sings · Bottom: fans waving lightsticks, the halves melting together"
     technique: [C-SPLIT-SOFT, S-CALL-RESPONSE, L-GLOW]
     layout: split_v          # soft seam (feather 0.2) by default
     layers:
       - {src: singer_live, in: 0, focus: [0.5, 0.35]}
       - {src: fans_light, in: 0, fx: [glow]}
     fx: [grain:8]
-    caption: "câu hát 2"
+    caption: "lyric line 2"
     transition: fadewhite:0.5
-    alt: ["Nửa trên blur ấm (ký ức) - fx: [blur:10, warm]", "C-SPLIT-HARD (feather: 0) cho cảm giác đối lập"]
+    alt: ["Top half blurred and warm (memory) - fx: [blur:10, warm]", "C-SPLIT-HARD (feather: 0) for contrast"]
 
   - id: S04
     start: 15.0
     end: 20.0
-    lyric: "điệp khúc"
-    intent: "Biển lightstick, khung hình đập theo beat"
+    lyric: "chorus"
+    intent: "Sea of lightsticks, the frame pulses on the beat"
     technique: [R-FLASH-DROP, R-ZOOM-PULSE, R-BEAT-FLASH, K-POP]
     layout: fit_blur
     layers:
       - {src: singer_live, in: 30}
     beat_fx: [zoom, flash]
     beat_every: 1
-    caption: "câu hook điệp khúc"
+    caption: "chorus hook line"
     caption_anim: pop
     transition: dissolve:0.6
-    alt: ["C-PIP: sân khấu lớn + cảnh xưa ở góc", "Thêm R-SHAKE cho 2 giây đầu"]
+    alt: ["C-PIP: big stage + old scene in the corner", "Add R-SHAKE for the first 2 s"]
 
   - id: S05
     start: 20.0
     end: 24.0
-    intent: "Kết: chậm lại, mờ dần về đen"
+    intent: "Ending: slow down, fade to black"
     technique: [R-SLOWMO, L-GLOW, K-TITLE]
     layout: full
     layers:
       - {src: fans_light, in: 20, speed: 0.5, fx: [glow, warm]}
-    caption: "Tên bài hát · Ca sĩ"
+    caption: "Song Title · Artist"
     caption_style: title
     caption_anim: rise
 
