@@ -85,8 +85,13 @@ often - [`reference/platforms.md`](skills/mv-maker/reference/platforms.md).
 - **Layering**: double exposure / blend modes (screen, overlay, soft light…) with opacity and blur.
 - **Looks**: 10 colour grades (teal-orange, kodak, golden, moody, bleach bypass, noir, pastel, matte, cyberpunk,
   cold-blue), cinema bars, drifting light leaks, bloom/halation, handheld drift, motion blur, VHS, old film, grain…
-- **Rhythm**: cuts on beats, beat-synced zoom pulse / flash / shake, **speed ramps**, **freeze frames**, optical-flow
-  slow motion, 35+ transitions (dissolve, flash, glitch, whip, zoom-through, dip to black, circle open, wipes…).
+- **Rhythm**: cuts on beats, beat-synced zoom pulse / flash / shake, **speed ramps**, **velocity edits** (slow motion on
+  every beat), **freeze frames**, optical-flow slow motion, 35+ transitions (dissolve, flash, glitch, whip, zoom-through,
+  zoom-blur, spin, film burn, strobe, dip to black, circle open, wipes…), lyrics that pulse or glow on the beat.
+- **One film from mixed footage**: automatic colour matching across cameras and sources, any `.cube` LUT, a crop that
+  **follows the subject** when 16:9 footage goes vertical, stabilisation, denoise, local contrast, optional AI upscale,
+  and a footage-quality check that flags sources enlarged too much. Film finishing: halation, anamorphic flare, film
+  grain, dust, gate weave, lens character. Signature shot: **text behind the person** (MediaPipe matte, optional).
 - **Style presets**: `preset: tiktok-remix` (or cinematic-ballad, kpop-stage, lofi-chill, rap-kinetic,
   wedding-romance, edm-neon, vintage-90s, rock-grunge, rnb-night, pop-bright) gives a coherent professional look in one line.
 - **Cut like a professional MV, genre by genre** (`genre: pop`): ballad, pop, K-pop, rap, EDM, rock, indie, R&B each

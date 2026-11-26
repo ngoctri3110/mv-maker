@@ -10,6 +10,8 @@ skills/mv-maker/fonts/
 skills/mv-maker/machine.json
 skills/mv-maker/runtime.txt
 skills/mv-maker/runtime.json
+# optional tools downloaded by `mv doctor --install upscale`
+skills/mv-maker/tools/
 
 # user work: audio, footage, renders
 projects/

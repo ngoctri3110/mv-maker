@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.10.0] - 2026-11-26
+
+### Added
+
+- Colour matching across sources (`color_match`, default 0.6 with footage presets; `match: false` per layer) and any
+  `.cube` LUT (`lut:<file>[@strength]`).
+- `focus: auto`: the 9:16 crop of 16:9 footage follows the subject (faces, else motion), smoothed like a calm operator.
+- Footage repair per layer: `stabilize` (vidstab two-pass, cached; deshake fallback), `denoise`, `denoise_hq`,
+  `clarity`; optional AI upscale `upscale: true` (Real-ESRGAN, `mv doctor --install upscale`).
+- Footage-quality check in `mv review` / `check` / `status`: sources enlarged more than 1.5x for their slot.
+- Velocity edit (`velocity: true` / `ramp: beat`), transitions `zoomblur`, `spin`, `burn`, `strobe`.
+- `lyric_beat: pulse|glow`: lyrics react to the beat.
+- Film finishing fx: `filmgrain`, `halation`, `flare`, `dust`, `weave`, `lens`; presets use some of them.
+- Text behind the person: shot `behind: true` (MediaPipe matte, `mv doctor --install segment`).
+
+### Fixed
+
+- Scene scoring (`mv ingest`) and subject tracking read frames forward instead of seeking each sample: seeks snap to
+  keyframes, so motion was often measured as zero.
+- The shot cache now includes the colour-match settings.
+
 ## [0.9.0] - 2026-11-26
 
 ### Added

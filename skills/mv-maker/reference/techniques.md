@@ -37,6 +37,7 @@ graphic contrast is the point, e.g. "you / me", before / after, a beat-heavy dan
 | R-HANDHELD | Handheld drift | Intimate, documentary, lo-fi | `fx: [handheld]` (`handheld:0.5` subtler) | ✅ |
 | R-MOTION-BLUR | Motion blur | Smooth fast movement, ramps, whips | `fx: [motionblur]` | ✅ |
 | R-CUT-LEAD | Cut 1-2 frames early | Cuts feel exactly on the beat (the eye lags ~1-2 frames) - every beat-driven MV | `cut_lead: 1f` | ✅ |
+| R-VELOCITY | Velocity edit | Slow motion lands on every beat, fast in between - TikTok dance / car / sport edits | shot `velocity: true` | ✅ |
 | R-LIPSYNC | Lip-synced performance | Artist mimes the song; stays in sync on every cut, multi-cam between takes | `mv sync`, layer `lipsync: true` | ✅ |
 
 ## 3. Transitions
@@ -51,6 +52,10 @@ graphic contrast is the point, e.g. "you / me", before / after, a beat-heavy dan
 | X-WHIP | Whip pan | Very fast change of place | `whip:0.25` (+ `motionblur` on both shots) | ✅ |
 | X-GLITCH | Glitch cut | Digital chaos, drops, rap/EDM | `glitch:0.25` (RGB split + noise + hue burst across the cut) | ✅ |
 | X-ZOOM | Zoom-through | Punch into the next scene | `zoom:0.4` | ✅ |
+| X-ZOOMBLUR | Zoom-blur punch | Energy cut on a beat, drops | `zoomblur:0.3` | ✅ |
+| X-SPIN | Spin | Playful / dance / montage cuts on the beat | `spin:0.3` | ✅ |
+| X-BURN | Film burn | Memory, warmth, chapter change, ballads | `burn:0.5` | ✅ |
+| X-STROBE | One-frame flash | Snare hits, rap punchlines | `strobe` | ✅ |
 | X-MATCH-CUT | Match cut | Match shape/motion across two shots (hand pushes a door → door opens in another era) - cinematic | choose `in:` with `mv sheet`, `cut` | ✅ |
 
 ## 4. Look / colour
@@ -72,6 +77,10 @@ Finishing: `letterbox[:0.1]` cinema bars · `leak[:0.4]` drifting warm light lea
 | L-BW | Black & white | Loneliness, raw truth, bridge | `bw`, `contrast:1.15` |
 | L-COOL | Cool | Parting, night, rain | `cool`, `sat:0.85` |
 | L-GLOW | Glow | Stage, lightsticks, dream | `glow` |
+| L-MATCH | Colour match | One film from many cameras/sources - always for mixed footage | `color_match: 0.6` (preset default) |
+| L-LUT | Film LUT | A real film / cinema look from a .cube file | `lut:looks/kodak2383.cube@0.8` |
+| L-FILM-FINISH | Film finishing | Halation, anamorphic flare, dust, gate weave, lens - "shot on film" | `halation`, `flare`, `dust`, `weave`, `lens`, `filmgrain` |
+| L-REPAIR | Footage repair | Phone / low-light / shaky clips | layer `fx: [stabilize, denoise, clarity]`, `upscale: true` |
 | L-GLITCH | Glitch | Chaos, inner conflict, electronic beats | `rgbsplit`, `vhs` (short) |
 
 ## 5. Lyrics / text  (full guide: `reference/lyrics.md`)
@@ -94,12 +103,15 @@ Finishing: `letterbox[:0.1]` cinema bars · `leak[:0.4]` drifting warm light lea
 | K-MARKER | Highlighter as sung | Sing-along, emphatic lines | `lyric_style: marker` |
 | K-STAGGER | Kinetic key-word layout | Kinetic-typography lyric videos | `lyric_style: stagger` (+ `emph:`) |
 | K-TEMPLATE | Lyric-video template | Whole lyric video from a look in one step | `mv auto --template lv-...` |
+| K-BEAT | Lyrics on the beat | Lyrics pulse or glow with the music | `lyric_beat: pulse` / `glow` |
+| K-BEHIND | Text behind the person | Title / hook line passing behind the singer - a signature shot | shot `behind: true` |
 | K-SPECTRUM | Audio spectrum / wave | Lyric videos, visualizers | `visualizer: {type: bars}` |
 | L-GEN-BG | Generated background | No footage: smoke, bokeh, paper, grunge, blocks, CRT, gradient | source `gen: "smoke:$1,$3"` |
 
 ## 6. Storytelling devices (concept level)
 | ID | Device | Description |
 |---|---|---|
+| S-REFRAME | Subject-tracking reframe | 16:9 footage in a 9:16 video without losing the subject | layer `focus: auto` |
 | S-INTERCUT | Performance / story intercut | Verses on the story, choruses on the performance, bridge breaks the pattern; `role:` per shot (genres.md) |
 | S-COVERAGE | Size progression | Wide → medium → close as emotion rises; change `size:` on every cut from the same source (no jump cuts) |
 | S-TITLE-CARD | Official title card | Artist + "Title" lower-left over the intro, end card at the close (`title_card`, `end_card`) |

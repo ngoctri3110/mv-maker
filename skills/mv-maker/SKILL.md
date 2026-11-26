@@ -77,6 +77,9 @@ Show the chosen list with licences and **wait for OK**, then `mv fetch <p>`. Per
 layers `{src: <id>, lipsync: true}`. Exact in-points by hand: `mv sheet <p> <id>`; `focus: [x, y]` for crops.
 
 **6. Proxy loop.** `mv render <p> --mode proxy` (cached per shot) → `mv proof <p>` → fix → `mv proof <p> --only ...`.
+Make it look like one film: footage presets match colour across sources (`color_match`); fix weak clips per layer -
+`focus: auto` (16:9 → 9:16 follows the subject), `fx: [stabilize, denoise]`, `upscale: true`; review's **Footage
+quality** lists over-enlarged sources. Finishing, transitions, velocity, `lyric_beat`, `behind`: `techniques.md`.
 
 **7. Final** (`setup.md`): `mv render <p> --mode final`, plus `--format` versions and `--cut` short versions from the
 platform plan; `mv proof --mode final` to check; deliver `out/*.mp4` + `out/credits.txt`.

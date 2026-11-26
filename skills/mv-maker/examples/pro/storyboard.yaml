@@ -1,5 +1,5 @@
 # Pro effects showcase on synthetic footage: grades, cinema bars, light leak, handheld, bloom, motion blur,
-# speed ramp, freeze frame, glitch / whip / zoom transitions.
+# speed ramp, freeze frame, glitch / whip / zoom / film-burn / spin transitions, velocity edit, film finishing.
 title: "Demo: pro effects"
 slug: pro-effects
 lang: en
@@ -54,7 +54,7 @@ shots:
     fx: ["grade:cyberpunk", "chroma:4", "sharpen"]
     caption: "4 · cyberpunk + chroma"
     caption_style: credit
-    transition: "flashblack:0.3"
+    transition: "burn:0.5"
 
   - id: P5
     start: 16
@@ -64,4 +64,16 @@ shots:
     layers: [{src: A, in: 40}]
     fx: ["grade:noir", "grain:12", "letterbox:0.12", "vignette"]
     caption: "5 · noir + grain"
+    caption_style: credit
+    transition: "spin:0.3"
+
+  - id: P6
+    start: 20
+    end: 24
+    intent: "Velocity edit (slow on every beat) + film finishing: halation, anamorphic flare, dust, gate weave, lens"
+    technique: [R-VELOCITY, L-FILM-FINISH]
+    velocity: true
+    layers: [{src: B, in: 12}]
+    fx: ["grade:golden", "halation:0.5", "flare:0.5", "filmgrain:10", "dust:0.5", "weave", "lens"]
+    caption: "6 · velocity + halation, flare, dust, weave, lens"
     caption_style: credit

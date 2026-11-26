@@ -73,6 +73,8 @@ import gen as GEN  # noqa: E402
 import editcheck as EC  # noqa: E402
 import platforms as PL  # noqa: E402
 import assist as AS  # noqa: E402
+import footage as FG  # noqa: E402
+import threading  # noqa: E402
 
 RT.apply_runtime_env()  # FFmpeg chosen with `mv doctor --use-ffmpeg` (this process only)
 
@@ -170,6 +172,8 @@ def apply_preset(sb: dict, shots: list) -> dict:
             sb.setdefault(k, v)
     if pr.get("palette"):
         sb.setdefault("palette", list(pr["palette"]))
+    if pr.get("kind") != "lyric-template":
+        sb.setdefault("color_match", 0.6)  # footage from different cameras/sources looks like one film
     for k, v in (pr.get("defaults") or {}).items():
         if k == "typo":
             sb["typo"] = {**v, **(sb.get("typo") or {})}
@@ -384,6 +388,10 @@ def parse_transition(v) -> tuple[str, str, float]:
         return ("cut", "cut", 0.0)
     if name == "glitch":
         return ("glitch", "glitch", float(d) if d else 0.25)
+    if name in ("zoomblur", "spin", "burn"):  # beat-friendly transitions drawn on both sides of the cut
+        return (name, name, float(d) if d else {"zoomblur": 0.3, "spin": 0.3, "burn": 0.45}[name])
+    if name == "strobe":
+        return ("flash", "flash", float(d) if d else 0.08)
     if name == "flashblack":
         return ("fadeblack", "fadeblack", float(d) if d else 0.3)
     if name == "whip":
@@ -422,6 +430,14 @@ GRADES = {
 def fx_filters(fx_list, label: str, w: int | None = None, h: int | None = None, fps: int = 30) -> list[str]:
     out: list[str] = []
     for n, raw in enumerate(fx_list or []):
+        if isinstance(raw, tuple) and raw[0] == "__raw__":  # resolved by the renderer (e.g. a LUT file)
+            filt, amt = raw[1], raw[2]
+            if amt >= 0.999:
+                out.append(filt)
+            else:
+                p = f"{label}r{n}"
+                out.append(f"format=gbrp,split[{p}a][{p}b];[{p}b]{filt}[{p}c];[{p}a][{p}c]blend=all_mode=normal:all_opacity={amt}")
+            continue
         name, _, arg = str(raw).partition(":")
         if name == "grade":
             if arg not in GRADES:
@@ -488,6 +504,48 @@ def fx_filters(fx_list, label: str, w: int | None = None, h: int | None = None, 
             out.append(f"rgbashift=rh=-{px}:bh={px}")
         elif name == "mirror":
             out.append("hflip")
+        elif name == "denoise":  # phone / low-light noise (fast); denoise_hq = nlmeans (slow, cleaner)
+            k = a or 1.0
+            out.append(f"hqdn3d={1.5 * k:.2f}:{1.2 * k:.2f}:{5 * k:.2f}:{4 * k:.2f}")
+        elif name == "denoise_hq":
+            out.append(f"nlmeans=s={a or 3.0}:p=5:r=11")
+        elif name == "clarity":  # local contrast ("pop") without over-sharpening edges
+            out.append(f"unsharp=13:13:{a or 0.35}:13:13:0")
+        elif name == "filmgrain":  # luminance grain, closer to film than RGB noise
+            out += ["format=yuv444p", f"noise=c0s={int(a or 10)}:c0f=t+u"]
+        elif name == "halation":  # red-orange glow bleeding from the brightest highlights (film emulsion)
+            p = f"{label}h{n}"
+            thr = "clip((val-185)*3,0,255)"
+            out.append(f"format=gbrp,split[{p}a][{p}b];[{p}b]lutrgb=r='{thr}':g='{thr}':b='{thr}',"
+                       f"gblur=sigma={max(6, (w or 1080) // 60)},colorchannelmixer=rr=1:gg=0.35:bb=0.12[{p}c];"
+                       f"[{p}a][{p}c]blend=all_mode=screen:all_opacity={a or 0.5}")
+        elif name == "flare":  # anamorphic horizontal streaks from highlights
+            p = f"{label}f{n}"
+            thr = "clip((val-200)*4,0,255)"
+            out.append(f"format=gbrp,split[{p}a][{p}b];[{p}b]lutrgb=r='{thr}':g='{thr}':b='{thr}',"
+                       f"gblur=sigma={max(20, (w or 1080) // 10)}:sigmaV=1.5,colorchannelmixer=rr=0.45:gg=0.75:bb=1.0[{p}c];"
+                       f"[{p}a][{p}c]blend=all_mode=screen:all_opacity={a or 0.6}")
+        elif name == "dust":  # flickering dust specks of projected film
+            if not (w and h):
+                die("dust needs a known frame size")
+            p = f"{label}d{n}"
+            out.append(f"format=gbrp[{p}a];color=c=black:s={w}x{h}:r={fps},noise=alls=100:allf=t,"
+                       f"lutyuv=y='if(gt(val,251),255,0)':u=128:v=128,gblur=sigma=0.9,format=gbrp[{p}d];"
+                       f"[{p}a][{p}d]blend=all_mode=screen:all_opacity={a or 0.6}:shortest=1")
+        elif name == "weave":  # film gate weave: tiny frame-to-frame jitter
+            if not (w and h):
+                die("weave needs a known frame size")
+            k = a or 1.0
+            out.append(f"crop=w=iw*0.97:h=ih*0.97:x='(iw-ow)/2+iw*{0.0025 * k:.4f}*sin(n*1.7+cos(n*0.37))':"
+                       f"y='(ih-oh)/2+ih*{0.003 * k:.4f}*sin(n*2.3+sin(n*0.71))',scale={w}:{h}")
+        elif name == "lens":  # slight barrel distortion + edge softness of a vintage lens
+            if not (w and h):
+                die("lens needs a known frame size")
+            k = a or 1.0
+            out.append(f"lenscorrection=k1={-0.08 * k:.3f}:k2={-0.02 * k:.3f},scale={int(w * 1.06) // 2 * 2}:-2,"
+                       f"crop={w}:{h},vignette=PI/5")
+        elif name in ("stabilize", "lut"):
+            die(f"'{name}' is resolved per layer by the renderer - put it in a layer's fx")
         elif name == "glow":
             p = f"{label}g{n}"
             out.append(f"format=gbrp,split[{p}a][{p}b];[{p}b]gblur=sigma=14[{p}c];"
@@ -497,10 +555,10 @@ def fx_filters(fx_list, label: str, w: int | None = None, h: int | None = None, 
     return out
 
 
-def ramp_segments(keys, out_len: float, step: float = 0.1) -> list[tuple[float, float, float]]:
+def ramp_segments(keys, out_len: float, step: float = 0.1, max_segs: int = 40) -> list[tuple[float, float, float]]:
     """Speed ramp keyframes [[shot_time, speed], ...] -> piecewise segments (out_start, in_start, speed),
     speeds linearly interpolated every `step` s; last element is (out_len, in_total, 0)."""
-    step = max(step, out_len / 40)  # keep the nested setpts expression small
+    step = max(step, out_len / max_segs)  # keep the nested setpts expression small
     keys = sorted((float(t), float(s)) for t, s in keys)
     if keys[0][0] > 0:
         keys.insert(0, (0.0, keys[0][1]))
@@ -520,6 +578,16 @@ def ramp_segments(keys, out_len: float, step: float = 0.1) -> list[tuple[float, 
         src += dt * sp
     segs.append((out_len, src, 0.0))
     return [(round(a, 4), round(b, 4), round(c, 4)) for a, b, c in segs]
+
+
+def velocity_keys(beats: list[float], out_len: float, slow: float = 0.35, fast: float = 2.2) -> list[list[float]]:
+    """Velocity edit: slow motion right on each beat, fast between beats (the TikTok "velocity" look)."""
+    keys = [[0.0, fast]]
+    for b in beats:
+        if 0.05 < b < out_len - 0.05:
+            keys += [[max(0.0, b - 0.16), fast], [max(0.0, b - 0.02), slow], [min(out_len, b + 0.14), slow]]
+    keys.append([out_len, fast])
+    return sorted(keys)
 
 
 def ramp_expr(segs) -> str:
@@ -578,6 +646,9 @@ class Renderer:
         self.fps = m["fps"] or int(prj.sb.get("fps", 30))
         self.crf, self.preset = m["crf"], m["preset"]
         self.jobs = jobs
+        self._lock = threading.Lock()
+        self.color = {}          # layer key -> colour stats (sb.color_match)
+        self.color_target = None
         self.dir = prj.build / mode
         (self.dir / "shots").mkdir(parents=True, exist_ok=True)
         (self.dir / "labels").mkdir(exist_ok=True)
@@ -632,6 +703,27 @@ class Renderer:
         chain: list[str] = []
         spec = self.p.gen_spec(sid)
         pre: list[str] = []
+        fx_list = [self._resolve_fx(x) for x in list(ly.get("fx") or []) + list(extra_fx or [])]
+        stab = next((x for x in fx_list if str(x).split(":")[0] == "stabilize"), None)
+        fx_list = [x for x in fx_list if str(x).split(":")[0] != "stabilize"]
+        cm = None
+        span = None if spec else self._layer_span(sid, ly, need)
+        if span and self.color_target is not None and ly.get("match") is not False:
+            st = self.color.get(FG.key(FG.file_key(span[0]), round(span[1], 2), round(span[2], 2)))
+            cm = FG.match_filter(st, self.color_target, float(self.p.sb.get("color_match") or 0) if
+                                 not isinstance(self.p.sb.get("color_match"), bool) else 0.6)
+        if span and ly.get("upscale"):  # AI upscale (Real-ESRGAN) of exactly the part this shot uses
+            binp = FG.realesrgan_bin(SKILL_DIR)
+            if binp is None:
+                print(f"[mv] WARN {shot_id}: upscale skipped - Real-ESRGAN not installed (mv doctor --install upscale)")
+            else:
+                uf, ust, ud, img = span
+                dst = self.dir / "upscaled" / f"{FG.key(FG.file_key(uf), ust, ud)}{'.png' if img else '.mp4'}"
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                with self._lock:
+                    print(f"[mv] upscaling {sid} for {shot_id} ...")
+                    f = FG.upscale_clip(binp, uf, ust, ud + 0.6, self.fps, dst, image=img)
+                ly = {**ly, "in": 0, "_upscaled": True}
         if spec:
             f = None
             try:
@@ -642,11 +734,19 @@ class Renderer:
         elif f is not None and f.suffix.lower() in IMAGE_EXT:
             args = ["-loop", "1", "-framerate", str(self.fps), "-t", f"{need:.3f}", "-i", str(f)]
         elif f is not None:
-            start = max(0.0, tsec(ly.get("in", 0)) - self.p.source_offset(sid))
-            ramp = ramp_segments(ly.get("ramp"), need) if ly.get("ramp") else None
+            start = 0.0 if ly.get("_upscaled") else max(0.0, tsec(ly.get("in", 0)) - self.p.source_offset(sid))
+            ramp = ramp_segments(ly.get("ramp"), need, max_segs=int(ly.get("_ramp_segs", 40))) if ly.get("ramp") else None
             src_need = (ramp[-1][1] if ramp else need * speed) + 0.5
             args = ["-stream_loop", "-1", "-ss", f"{start:.3f}", "-t", f"{src_need:.3f}", "-i", str(f)]
             chain.append("setpts=PTS-STARTPTS")
+            if stab:  # vidstab: detect pass on the exact frames (cached), transform here, before any re-timing
+                k = float(str(stab).partition(":")[2] or 1)
+                trf = self.dir / "stab" / f"{FG.key(FG.file_key(f), round(start, 2), round(src_need, 2))}.trf"
+                if FG.stabilize_pass(f, start, src_need, trf):
+                    chain.append(f"vidstabtransform=input=stab/{trf.name}:smoothing={int(20 * k)}:optzoom=1:"
+                                 f"zoomspeed=0.2:interpol=bicubic,unsharp=5:5:0.5")
+                else:
+                    chain.append("deshake=rx=32:ry=32")
             chain.append(f"setpts='({ramp_expr(ramp)})/TB'" if ramp else f"setpts=PTS/{speed}")
         else:  # placeholder card for the animatic
             color = PLACEHOLDER_COLORS[int(hashlib.md5(str(sid).encode()).hexdigest(), 16) % len(PLACEHOLDER_COLORS)]
@@ -667,7 +767,14 @@ class Renderer:
             label_filter = (f"drawtext=fontfile={self.font}:textfile=labels/{lab}.txt:fontcolor=white:"
                             f"fontsize={fs}:line_spacing={fs // 3}:x=(w-text_w)/2:y=(h-text_h)/2:"
                             f"box=1:boxcolor=black@0.45:boxborderw={fs // 2}")
-        fit = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos" if contain else cover(w, h, ly.get("focus"))
+        focus = ly.get("focus")
+        if focus in ("auto", "track") and span and not span[3] and not contain:
+            fit = self._tracked_cover(f, span, ly, w, h, need, speed)
+        else:
+            fit = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos" if contain else \
+                cover(w, h, focus if isinstance(focus, list) else None)
+        if cm:
+            fit += "," + cm
         if spec:
             fit = f"scale={w}:{h}"
         if f is not None and ly.get("smooth") and (speed < 1 or ly.get("ramp")):
@@ -687,12 +794,91 @@ class Renderer:
             zexpr = f"1+{amt}*on/{frames}" if z == "in" else f"{1 + amt}-{amt}*on/{frames}"
             chain += [f"scale={2 * w}:{2 * h}",
                       f"zoompan=z='{zexpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={w}x{h}:fps={self.fps}"]
-        chain += fx_filters(list(ly.get("fx") or []) + list(extra_fx or []), lab, w, h, self.fps)
+        chain += fx_filters(fx_list, lab, w, h, self.fps)
         if f is None and not spec:
             chain.append(label_filter)  # after zoom/fx so the card text stays readable
         chain += [f"tpad=stop_mode=clone:stop_duration={need:.3f}", f"trim=duration={need:.3f}",
                   "setpts=PTS-STARTPTS", "setsar=1", "format=gbrp"]
         return args, chain, lab, pre
+
+    def _velocity(self, ly: dict, s: float, e: float, need: float, sh: dict) -> dict:
+        """`ramp: beat` (or shot `velocity: true`) -> ramp keys from the beats inside the shot."""
+        if not isinstance(ly, dict) or ly.get("blend") or not (ly.get("ramp") == "beat" or (sh.get("velocity") and not ly.get("ramp"))):
+            return ly
+        v = sh.get("velocity") if isinstance(sh.get("velocity"), dict) else {}
+        beats = self.p.beats_in(s, e, int(v.get("every", sh.get("beat_every", 1))))
+        keys = velocity_keys(beats, need, float(v.get("slow", 0.35)), float(v.get("fast", 2.2)))
+        return {**ly, "ramp": keys, "_ramp_segs": 120}
+
+    def _resolve_fx(self, x):
+        """`lut:<file.cube>[@0.7]` -> a raw lut3d filter with the LUT copied next to the graph."""
+        if isinstance(x, str) and x.startswith("lut:"):
+            try:
+                filt, amt = FG.lut_filter(x[4:], self.dir / "luts", self.p.root)
+            except FileNotFoundError as e:
+                die(str(e))
+            return ("__raw__", filt, amt)
+        return x
+
+    def _tracked_cover(self, f: Path, span, ly: dict, w: int, h: int, need: float, speed: float) -> str:
+        """focus: auto - a crop window that follows the subject (faces, else motion) through the shot."""
+        _, start, d, _ = span
+        tf = self.p.build / "track" / f"{FG.key(FG.file_key(f), round(start, 2), round(d, 2))}.json"
+        if tf.exists():
+            track = [tuple(x) for x in json.loads(tf.read_text(encoding="utf-8"))]
+        else:
+            track = FG.track_subject(f, start, max(d, 0.5))
+            tf.parent.mkdir(parents=True, exist_ok=True)
+            tf.write_text(json.dumps(track), encoding="utf-8")
+        ex, ey = FG.track_expr(track, 0, speed), FG.track_expr(track, 1, speed)
+        # window centred on the subject: anchor = clip((centre - half window) / free space)
+        return (f"scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,"
+                f"crop={w}:{h}:'max(0,min(in_w-{w},in_w*({ex})-{w}/2))':'max(0,min(in_h-{h},in_h*({ey})-{h}/2))'")
+
+    def transition_filters(self, sid: str, kind: str, d: float, pk: str, pd: float, dur: float, need: float) -> list[str]:
+        """zoomblur / spin / burn: half of the move at the end of the outgoing shot, half at the start of the next."""
+        W, H, fps = self.W, self.H, self.fps
+        out_w = kind in ("zoomblur", "spin", "burn")
+        in_w = pk in ("zoomblur", "spin", "burn")
+        if not (out_w or in_w):
+            return []
+        f = []
+        t0 = dur - d
+        zt, rt, blur, burn = [], [], [], []
+        if out_w:
+            win = f"clip((on-{int(t0 * fps)})/{max(1, int(d * fps))},0,1)"
+            twin = f"clip((t-{t0:.3f})/{d:.3f},0,1)"
+            if kind in ("zoomblur", "spin"):
+                zt.append(f"{1.0 if kind == 'zoomblur' else 0.5}*pow({win},2)")
+                blur.append(f"gt(t,{t0 + d * 0.3:.3f})")
+            if kind == "spin":
+                rt.append(f"0.45*pow({twin},2)")
+            if kind == "burn":  # blend expressions use T for time
+                burn.append(twin.replace("(t-", "(T-"))
+        if in_w:
+            win = f"clip(1-on/{max(1, int(pd * fps))},0,1)"
+            twin = f"clip(1-t/{pd:.3f},0,1)"
+            if pk in ("zoomblur", "spin"):
+                zt.append(f"{1.0 if pk == 'zoomblur' else 0.5}*pow({win},2)")
+                blur.append(f"lt(t,{pd * 0.7:.3f})")
+            if pk == "spin":
+                rt.append(f"-0.45*pow({twin},2)")
+            if pk == "burn":
+                burn.append(twin.replace("1-t/", "1-T/"))
+        if zt:
+            f += [f"scale={2 * W}:{2 * H}",
+                  f"zoompan=z='1+{'+'.join(zt)}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={W}x{H}:fps={fps}"]
+        if rt:
+            f.append(f"rotate=a='{'+'.join(rt)}':c=black")
+        if blur:
+            f.append(f"gblur=sigma={max(4, W // 60)}:enable='{'+'.join(blur)}'")
+        if burn:
+            p = f"{sid}b"
+            k = f"max({','.join(burn)},0)" if len(burn) > 1 else burn[0]
+            f.append(f"format=gbrp[{p}a];gradients=s={W}x{H}:c0=0xfff4d6:c1=0xff9a3c:c2=0xff3a10:nb_colors=3:"
+                     f"x0={W // 3}:y0=0:x1={W}:y1={H}:speed=0.08:rate={fps},format=gbrp,gblur=sigma={max(10, W // 30)}[{p}g];"
+                     f"[{p}a][{p}g]blend=all_expr='A+(255-A)*B/255*{k}*1.4':shortest=1")
+        return f
 
     def beat_filters(self, sh: dict, s: float, e: float, need: float) -> list[str]:
         """Beat-synced punch: zoom pulse, camera shake, brightness flash (beats from analysis.json)."""
@@ -729,7 +915,8 @@ class Renderer:
             files.append([str(f), f.stat().st_mtime if f else 0])
         beats = self.p.beats if sh.get("beat_fx") else []
         blob = json.dumps([sh, prev_tr, files, self.W, self.H, self.fps, self.mode, self.p.sources, beats,
-                           self.p.sb.get("palette"), self.p.sb.get("accent"), ENGINE_HASH], sort_keys=True, default=str)
+                           self.p.sb.get("palette"), self.p.sb.get("accent"), self.p.sb.get("color_match"),
+                           round(self.color_target or 0, 3), ENGINE_HASH], sort_keys=True, default=str)
         return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
     def render_shot(self, i: int) -> Path:
@@ -749,6 +936,7 @@ class Renderer:
         layout = sh.get("layout", "full")
         slots = slots_for(layout, W, H, sh)
         layers = sh.get("layers") or []
+        layers = [self._velocity(ly, s, e, need, sh) for ly in layers]
         base = [ly for ly in layers if not ly.get("blend")]
         over = [ly for ly in layers if ly.get("blend")]
         base += [{"src": None, "note": "(empty slot)"}] * max(0, len(slots) - len(base))
@@ -844,6 +1032,7 @@ class Renderer:
             post.append(glitch.format(w=f"lt(t,{pd:.3f})"))
         if kind == "glitch":
             post.append(glitch.format(w=f"gt(t,{dur - d:.3f})"))
+        post += self.transition_filters(sid, kind, d, pk, pd, dur, need)
         if i == 0 and sh.get("fade_in", True):
             post.append("fade=t=in:st=0:d=0.4")
         if kind == "fadeblack":
@@ -917,6 +1106,11 @@ class Renderer:
         aw.lyrics(self.p.lyric_lines(), style_for, area, geom["align"] if geom else None,
                   sb.get("lyric_highlight", "line"), sb.get("lyric_anim", default_anim),
                   lead=float(sb.get("lyric_lead", 0.15)))
+        if sb.get("lyric_beat") and self.p.beats:
+            lb = sb["lyric_beat"]
+            mode = lb if isinstance(lb, str) else (lb.get("mode", "pulse") if isinstance(lb, dict) else "pulse")
+            every = int(lb.get("every", 2)) if isinstance(lb, dict) else 2
+            aw.beat_react([b for i, b in enumerate(self.p.beats) if i % every == 0], mode)
         tc = sb.get("title_card")
         if tc:
             a0 = tsec(tc.get("start", s0 + 0.8))
@@ -1028,7 +1222,20 @@ class Renderer:
             a_args = ["-ss", f"{ss:.3f}", "-t", f"{total:.3f}", "-i", str(ap)]
             n_a = len(shot_files)
         acc, a_src = self.player_filters(acc, total, n_a, graph)
-        graph.append(f"[{acc}]subtitles=captions.ass:fontsdir=fonts,trim=duration={total:.3f},format=yuv420p[vout]")
+        graph.append(f"[{acc}]subtitles=captions.ass:fontsdir=fonts,trim=duration={total:.3f}[subd]")
+        acc = "subd"
+        extra: list[str] = []  # inputs after the audio, so the audio keeps its index
+        for i, sh in enumerate(p.shots):  # behind: true -> the person is cut out and laid back over the text
+            if not sh.get("behind"):
+                continue
+            matte = FG.person_matte(shot_files[i], self.dir / "matte" / f"{i:03d}_{sh['id']}.mp4", self.fps, self.W, self.H)
+            n_v = len(shot_files) + (1 if a_args else 0) + extra.count("-i")
+            extra += ["-i", str(shot_files[i].relative_to(self.dir)), "-i", str(matte.relative_to(self.dir))]
+            a0 = tsec(sh["start"]) - s0
+            graph.append(f"[{n_v}:v][{n_v + 1}:v]alphamerge,setpts=PTS+{a0:.3f}/TB[bh{i}]")
+            graph.append(f"[{acc}][bh{i}]overlay=eof_action=pass:enable='between(t,{a0:.3f},{tsec(sh['end']) - s0:.3f})'[bo{i}]")
+            acc = f"bo{i}"
+        graph.append(f"[{acc}]format=yuv420p[vout]")
         if n_a is not None:
             fo = float(p.sb.get("audio_fade_out", 0))
             af = f"afade=t=out:st={max(0, total - fo):.3f}:d={fo}" if fo > 0 else "anull"
@@ -1042,7 +1249,7 @@ class Renderer:
         p.out.mkdir(exist_ok=True)
         name = f"{p.sb.get('slug') or p.root.name}_{self.mode}_{p.sb.get('format', '9:16').replace(':', 'x')}.mp4"
         out = p.out / name
-        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args, *a_args,
+        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args, *a_args, *extra,
                "-/filter_complex", "assemble.filter", "-map", "[vout]", *a_map, *enc,
                "-r", str(self.fps), "-movflags", "+faststart", "-t", f"{total:.3f}", str(out)]
         run(cmd, cwd=self.dir)
@@ -1065,8 +1272,40 @@ class Renderer:
             return ["-c:v", e, "-quality", "quality", "-rc", "cqp", "-qp_i", "19", "-qp_p", "21", "-pix_fmt", "yuv420p"]
         die(f"unknown encoder {e}")
 
+    def _layer_span(self, sid: str, ly: dict, need: float):
+        """(file, start in file, seconds of source used, is image) for a real footage layer, else None."""
+        f = self.p.source_file(sid) if sid else None
+        if f is None or self.p.gen_spec(sid):
+            return None
+        if f.suffix.lower() in IMAGE_EXT:
+            return f, 0.0, need, True
+        start = max(0.0, tsec(ly.get("in", 0)) - self.p.source_offset(sid))
+        return f, start, need * float(ly.get("speed", 1.0) or 1.0), False
+
+    def prepare_color(self):
+        """color_match: measure every footage layer once (3 tiny frames each, cached) and aim all of them at the
+        edit's median exposure with a neutral white balance."""
+        if not self.p.sb.get("color_match"):
+            return
+        cache = FG.Cache(self.p.build / "color_stats.json")
+        for sh in self.p.shots:
+            dur = tsec(sh["end"]) - tsec(sh["start"])
+            for ly in sh.get("layers") or []:
+                if not isinstance(ly, dict) or ly.get("match") is False:
+                    continue
+                span = self._layer_span(ly.get("src"), ly, dur)
+                if span:
+                    f, st, d, img = span
+                    k = FG.key(FG.file_key(f), round(st, 2), round(d, 2))
+                    self.color[k] = cache.get(k, lambda: FG.color_stats(f, st, d, img))
+        ys = sorted(v["y"] for v in self.color.values() if v)
+        if ys:
+            self.color_target = float(self.p.sb.get("color_target") or ys[len(ys) // 2])
+            print(f"[mv] colour match: {len(ys)} layers -> exposure {self.color_target:.2f}")
+
     def run_all(self) -> Path:
         n = len(self.p.shots)
+        self.prepare_color()
         print(f"[mv] {self.mode}: {n} shots @ {self.W}x{self.H} {self.fps}fps, jobs={self.jobs}")
         with ThreadPoolExecutor(max_workers=self.jobs) as ex:
             files = list(ex.map(self.render_shot, range(n)))
@@ -1260,7 +1499,7 @@ def cmd_demo(a):
                 if kind:
                     ext = ".png" if kind in ("photo", "poster") else ".mp4"
                     make_demo_asset(kind, root / "sources" / f"{sid}{ext}")
-            if name != "lyric-template" and (sb.get("genre") or any(sh.get("beat_fx") for sh in sb.get("shots") or [])):
+            if name != "lyric-template" and (sb.get("genre") or sb.get("lyric_beat") or any(sh.get("beat_fx") or sh.get("velocity") for sh in sb.get("shots") or [])):
                 cmd_analyze(argparse.Namespace(project=str(root), audio=None, lyrics=False, model="medium",
                                                language="vi", sections=None))
             if "perf" in (sb.get("sources") or {}):
@@ -1438,7 +1677,7 @@ REVIEW_LABELS = {
                soft="soft seam", hard="hard cut", alts="Alternatives per shot (pick to swap)",
                approve="> Approve: reply OK, or give shot id + option to change (e.g. `S03 -> option 2`).",
                check="Edit check (genre cutting grammar)", genre="Genre", preset="Style",
-               platforms="Platform check"),
+               platforms="Platform check", footage="Footage quality"),
     "vi": dict(format="Khung hình", duration="Thời lượng", avg="trung bình", lyric="Lyric", style="kiểu", accent="màu nhấn",
                lines="câu", reading="Đọc bài hát", look="Look tổng thể", plan="Đề xuất kỹ thuật theo ý nghĩa bài hát",
                meaning="Ý nghĩa / cảm xúc", rec="⭐ Đề xuất", why="Vì sao hợp", other="Phương án khác",
@@ -1448,7 +1687,7 @@ REVIEW_LABELS = {
                soft="viền mềm", hard="cắt cứng", alts="Phương án thay thế từng shot (chọn để đổi)",
                approve="> Duyệt: trả lời OK, hoặc ghi số shot + phương án muốn đổi (vd. `S03 -> phương án 2`).",
                check="Kiểm tra nhịp dựng (theo thể loại)", genre="Thể loại", preset="Phong cách",
-               platforms="Kiểm tra theo nền tảng"),
+               platforms="Kiểm tra theo nền tảng", footage="Chất lượng footage"),
 }
 
 
@@ -1544,6 +1783,9 @@ def cmd_review(a):
         L += ["", f"## {T['platforms']}", "", f"- {', '.join(pl['platforms'])} · "
               + " · ".join(f"{f}: {', '.join(n)}" for f, n in pl["versions"].items())]
         L += [f"- ⚠ {w}" for w in pw] or ["- ✅"]
+    fw = footage_warnings(p)
+    if fw:
+        L += ["", f"## {T['footage']}", ""] + [f"- ⚠ {w}" for w in fw]
     L += ["", T["approve"]]
     out = p.root / "storyboard.md"
     out.write_text("\n".join(L) + "\n", encoding="utf-8")
@@ -2006,6 +2248,7 @@ def cmd_status(a):
     if sb.get("genre") or any(sh.get("role") or sh.get("size") for sh in p.shots):
         warns += EC.check(sb, p.shots, p.beats, p.downbeats)["warnings"]
     warns += PL.check(sb, p.shots, dur)
+    warns += footage_warnings(p)
     L.append(f"checks: {len(warns)} warnings" + (f" (first: {warns[0][:90]})" if warns else ""))
     sm = sbp.stat().st_mtime
     md = root / "storyboard.md"
@@ -2055,6 +2298,46 @@ def cmd_context(a):
     print("\n".join(AS.context(genre, platforms, vtype, mood, load_presets(), EC.load_genres(), pt)))
 
 
+RES_MSG = {
+    "en": "{src} ({w}x{h}): enlarged up to {k:.1f}x in {ids} - looks soft on phones; use `layout: fit_blur`, a 4K or "
+          "vertical source, or `upscale: true` on the layer",
+    "vi": "{src} ({w}x{h}): bị phóng to tới {k:.1f} lần ở {ids} - sẽ mờ trên điện thoại; dùng `layout: fit_blur`, nguồn 4K "
+          "hoặc quay dọc, hoặc `upscale: true` cho layer",
+}
+
+
+def footage_warnings(p: "Project", limit: float = 1.5) -> list[str]:
+    """Sources enlarged too much for their slot at the final resolution (a 1080p landscape clip cropped to 9:16 is
+    only 608 px wide). One line per source, worst factor first."""
+    fmt = str(p.sb.get("format", "9:16"))
+    W, H = FORMATS.get(fmt, (1080, 1920))
+    sizes: dict = {}
+    worst: dict = {}
+    for sh in p.shots:
+        layout = sh.get("layout", "full")
+        if layout == "poster":
+            continue
+        slots = slots_for(layout, W, H, sh)
+        base = [ly for ly in (sh.get("layers") or []) if isinstance(ly, dict) and not ly.get("blend")]
+        for k, ly in enumerate(base[:len(slots)]):
+            sid = ly.get("src")
+            f = p.source_file(sid) if sid and not p.gen_spec(sid) else None
+            if f is None:
+                continue
+            wh = sizes.setdefault(f, FG.probe_wh(f))
+            zoom = 1 + float(ly.get("zoom_amount", 0.12)) if ly.get("zoom") else 1.0
+            fac = FG.upscale_factor(wh, slots[k], zoom, contain=layout == "fit_blur")
+            if ly.get("upscale"):
+                fac /= 4
+            if fac > limit:
+                w0 = worst.setdefault(sid, {"k": 0, "ids": [], "wh": wh})
+                w0["k"] = max(w0["k"], fac)
+                w0["ids"].append(str(sh["id"]))
+    T = RES_MSG.get(str(p.sb.get("lang", "en"))[:2], RES_MSG["en"])
+    return [T.format(src=sid, w=v["wh"][0], h=v["wh"][1], k=v["k"], ids=", ".join(v["ids"][:6]) + (" ..." if len(v["ids"]) > 6 else ""))
+            for sid, v in sorted(worst.items(), key=lambda x: -x[1]["k"])]
+
+
 def cmd_check(a):
     p = Project(a.project)
     p.validate()
@@ -2065,6 +2348,8 @@ def cmd_check(a):
         print("[mv] (no analysis.json - beat checks skipped; run: mv analyze <project>)")
     print("\n".join(EC.report_md(res)))
     for w in PL.check(p.sb, p.shots, tsec(p.shots[-1]["end"]) - tsec(p.shots[0]["start"]), p.sb.get("lang", "en")):
+        print(f"- ⚠ {w}")
+    for w in footage_warnings(p):
         print(f"- ⚠ {w}")
 
 

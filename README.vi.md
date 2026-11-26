@@ -80,7 +80,12 @@ tiêu đề tự đặt vào trong), **hook** (hình mạnh nhất trong 1-3 gi�
   VHS, đen trắng, glow, bloom, light leak, hạt phim, RGB split…
 - **Preset phong cách**: `preset: tiktok-remix` (hoặc cinematic-ballad, kpop-stage, lofi-chill, rap-kinetic,
   wedding-romance, edm-neon, vintage-90s, rock-grunge, rnb-night, pop-bright).
-- **Nhịp**: cắt theo beat, zoom nảy / nháy sáng / rung theo beat, slow-motion, 30+ kiểu chuyển cảnh.
+- **Nhịp**: cắt theo beat, zoom nảy / nháy sáng / rung theo beat, slow-motion, **velocity edit** (chậm đúng beat, nhanh giữa
+  các beat), 35+ kiểu chuyển cảnh (thêm zoom-blur, xoay, film burn, strobe), lyric nảy / sáng theo beat.
+- **Footage nhiều nguồn thành một bộ phim**: tự khớp màu giữa các máy quay/nguồn, dùng file LUT `.cube`, khung dọc **tự
+  bám theo nhân vật** khi cắt từ video ngang, chống rung, khử nhiễu, tăng tương phản cục bộ, upscale AI (tùy chọn), cảnh báo
+  nguồn bị phóng to quá mức. Hoàn thiện kiểu phim nhựa: halation, flare anamorphic, hạt phim, bụi, rung khung, méo ống kính.
+  Cảnh đặc trưng: **chữ chạy phía sau người** (tách người bằng MediaPipe, tùy chọn).
 - **Lyric**: phụ đề (song ngữ), karaoke tô màu, hiện từng chữ, đánh máy, chữ lớn xếp tầng, neon, cuộn kiểu Apple Music,
   grunge (chữ thô kiểu punk), dải giấy cắt dán, bút dạ quang tô theo lời hát, kinetic (từ khóa thật lớn, chữ so le).
 - **Dựng như MV chuyên nghiệp theo thể loại** (`genre: pop`): ballad, pop, K-pop, rap, EDM, rock, indie, R&B, mỗi thể

@@ -129,7 +129,8 @@ def py_info() -> dict:
     info = {"version": platform.python_version(), "executable": sys.executable,
             "in_skill_venv": str(SKILL_DIR / ".venv") in sys.executable, "modules": mods,
             "demucs": importlib.util.find_spec("demucs") is not None, "cuda_devices": 0, "yt_dlp_age_days": None,
-            "match": all(importlib.util.find_spec(m) is not None for m in ("torch", "transformers", "PIL"))}
+            "match": all(importlib.util.find_spec(m) is not None for m in ("torch", "transformers", "PIL")),
+            "segment": importlib.util.find_spec("mediapipe") is not None}
     if mods.get("faster_whisper"):
         try:
             import ctranslate2
@@ -221,6 +222,15 @@ def build(run_bench: bool = True) -> dict:
         heavy = "fast on this GPU" if has_nvidia else "slow on CPU (several minutes per song)"
         rec("demucs", "optional", f"Vocal separation for much better lyric timing on dense mixes - ~2 GB (PyTorch), {heavy}.",
             auto="pip install demucs")
+    import footage as FG  # same folder
+    if FG.realesrgan_bin(SKILL_DIR) is None:
+        gpu = "uses the GPU through Vulkan" if hw["gpus"] else "needs a Vulkan GPU - on CPU it is far too slow"
+        rec("upscale", "optional", "AI upscale (Real-ESRGAN) for soft / low-resolution clips and photos (`upscale: true` on "
+            f"a layer); {gpu}. ~45 MB download from the official GitHub release into the skill's tools/ folder.",
+            auto="download realesrgan-ncnn-vulkan")
+    if not py["segment"] and sys.version_info < (3, 13):
+        rec("segment", "optional", "Text behind the person (`behind: true` on a shot): MediaPipe person segmentation, "
+            "~40 MB, CPU is fine.", auto="pip install mediapipe==0.10.14")
     if not py["match"]:
         size = "~3 GB (PyTorch CUDA) + model 1.5-4.5 GB" if has_nvidia else "~0.8 GB (PyTorch CPU) + model ~1.5 GB"
         rec("match", "recommended", "Semantic footage matching (SigLIP 2, free, local): rank online candidates and find the "
@@ -290,6 +300,28 @@ def print_report(d: dict) -> None:
     print(f"\nSaved profile: {PROFILE}")
 
 
+REALESRGAN = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-{}.zip"
+
+
+def install_realesrgan() -> None:
+    """Official Real-ESRGAN ncnn/Vulkan release (binary + models) -> SKILL_DIR/tools/realesrgan (only on request)."""
+    import io
+    import urllib.request
+    import zipfile
+    name = {"Windows": "windows", "Darwin": "macos"}.get(OS, "ubuntu")
+    dst = SKILL_DIR / "tools" / "realesrgan"
+    print(f"[mv] downloading Real-ESRGAN ({name}) ...")
+    with urllib.request.urlopen(urllib.request.Request(REALESRGAN.format(name), headers={"User-Agent": "mv-maker"}),
+                                timeout=120) as r:
+        data = r.read()
+    dst.mkdir(parents=True, exist_ok=True)
+    zipfile.ZipFile(io.BytesIO(data)).extractall(dst)
+    for f in dst.rglob("realesrgan-ncnn-vulkan*"):
+        if f.is_file() and OS != "Windows":
+            f.chmod(0o755)
+    print(f"[mv] Real-ESRGAN in {dst}")
+
+
 def install(ids: list[str]) -> None:
     import lyrics as LY
     import runtime as RT
@@ -301,6 +333,11 @@ def install(ids: list[str]) -> None:
     pip = [sys.executable, "-m", "pip", "install"]
     cmds = {"py-deps": pip + ["-r", str(req)], "yt-dlp-update": pip + ["-U", "yt-dlp"],
             "whisper-cuda": pip + ["nvidia-cublas-cu12", "nvidia-cudnn-cu12==9.*"], "demucs": pip + ["demucs"]}
+    if "segment" in ids:
+        cmds["segment"] = pip + ["mediapipe==0.10.14"]
+    if "upscale" in ids:
+        ids = [i for i in ids if i != "upscale"]
+        install_realesrgan()
     if "match" in ids:  # PyTorch wheel per platform: CUDA on NVIDIA machines, small CPU build elsewhere
         nv = any("nvidia" in g.lower() for g in gpus())
         idx = [] if OS == "Darwin" else ["--index-url", "https://download.pytorch.org/whl/" + ("cu128" if nv else "cpu")]

@@ -200,6 +200,34 @@ class AssWriter:
             text = "{" + self.pre + text[1:] if text.startswith("{") else "{" + self.pre + "}" + text
         self.events.append(f"Dialogue: {layer},{self._ts(start)},{self._ts(end)},{style},,{ml},{mr},0,,{text}")
 
+    BEAT_STYLES = {"lyric", "karaoke", "neon", "big", "grunge", "paper", "marker", "stag", "stagbig"}
+
+    def beat_react(self, beats: list[float], mode: str = "pulse") -> None:
+        """Lyrics breathe with the music: a short scale pulse (or a glow flare) on each beat while a line is shown."""
+        def secs(ts: str) -> float:
+            h, m, sec = ts.split(":")
+            return int(h) * 3600 + int(m) * 60 + float(sec)
+        bt = [b - self.s0 for b in beats]
+        for i, ev in enumerate(self.events):
+            parts = ev.split(",", 9)
+            if len(parts) < 10 or parts[3] not in self.BEAT_STYLES:
+                continue
+            a, b = secs(parts[1]), secs(parts[2])
+            tags = []
+            for x in bt:
+                if a + 0.18 < x < b - 0.12:
+                    ms = int((x - a) * 1000)
+                    if mode == "glow":
+                        tags.append(f"\\t({ms},{ms + 50},\\blur6)\\t({ms + 50},{ms + 280},\\blur0.6)")
+                    else:
+                        tags.append(f"\\t({ms},{ms + 60},\\fscx108\\fscy108)\\t({ms + 60},{ms + 240},\\fscx100\\fscy100)")
+            if not tags:
+                continue
+            tag = "".join(tags[:60])
+            text = parts[9]
+            parts[9] = text.replace("}", tag + "}", 1) if text.startswith("{") else "{" + tag + "}" + text
+            self.events[i] = ",".join(parts)
+
     def write(self, path: Path) -> None:
         head = ["[Script Info]", "ScriptType: v4.00+", f"PlayResX: {self.W}", f"PlayResY: {self.H}",
                 "WrapStyle: 0", "ScaledBorderAndShadow: yes", "", "[V4+ Styles]",

@@ -11,6 +11,8 @@ shots below; edit single shots afterwards.
 | `theme` | | a colour variant of the preset (`themes:` in presets.yaml), e.g. `theme: sunset` |
 | `palette` | preset's | list of colours `$1 $2 $3` used by generated backgrounds (`gen:`); pick from the cover with `mv palette` |
 | `platforms` | | where it will be posted: `tiktok` `reels` `facebook_reels` `facebook_feed` `shorts` `youtube`, or `all` / `vertical` / `meta` - lyrics move inside the strictest safe zone; `mv review` adds a platform check (`mv platforms`, platforms.md) |
+| `color_match` | 0.6 with a footage preset | match exposure + white balance of every footage layer to the edit's median (0..1 strength; `true` = 0.6, `false` off; per layer `match: false`). `color_target` fixes the exposure (0..1) |
+| `lyric_beat` | | lyrics react to the music: `pulse` (scale pop) or `glow`, or `{mode, every}` (every 2nd beat by default) |
 | `loudness` | | integrated LUFS target (e.g. `-14`) - only for a mix far too quiet / loud; finished masters are left alone |
 | `genre` | | cutting grammar for the edit check: `ballad` `pop` `kpop` `rap` `edm` `rock` `indie` `rnb` (`mv genres`, genres.md) |
 | `cut_lead` | 0 | cut picture this much BEFORE each shot boundary: `1f`, `2f` (frames) or seconds (≤ 0.2). Audio/lyrics unchanged |
@@ -62,6 +64,8 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 | `look_for` | concrete visual description (string or list of phrasings, English best) for `mv match`; a shot with `look_for` and no layers is matched automatically |
 | `avoid` | what must not be in the picture (`"text, logo"`) - lowers matching scores |
 | `size` | `ews` `wide` `full` `medium` `mcu` `close` `ecu` `insert` `aerial` `pov` - edit check flags jump cuts / no size variety |
+| `velocity` | velocity edit: `true` or `{slow: 0.35, fast: 2.2, every: 1}` - slow motion on each beat, fast between (needs `mv analyze`) |
+| `behind` | `true` = text / lyrics pass BEHIND the person in this shot (MediaPipe matte; `mv doctor --install segment`) |
 | `layout` | `full` · `split_v` (top/bottom) · `split_h` (left/right) · `split_3v` (3 rows) · `pip` · `fit_blur` (whole source frame centred on its own blurred copy) · `poster` (cover card + blurred cover bg + player UI + lyric panel) |
 | `lyric_style` | per-shot override of the lyric style for lines starting inside this shot |
 | `ratio` | split position for split_v/split_h (0.5) |
@@ -84,10 +88,12 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 | `in` | start time inside the original source video |
 | `lipsync` | `true` = `in` follows the song (song time + the source's `sync`), so a performance clip stays lip-synced on every cut; a number = explicit offset. Speed must stay 1 |
 | `speed` | 0.5 = slow-mo, 2 = fast |
-| `focus` | `[x, y]` 0..1 crop anchor when aspect differs (e.g. `[0.5, 0.3]` keep faces) |
+| `focus` | `[x, y]` 0..1 crop anchor when aspect differs (e.g. `[0.5, 0.3]` keep faces); `auto` = the crop follows the subject (faces, else motion) through the shot |
+| `upscale` | `true` = AI upscale (Real-ESRGAN) of the part used, for soft / low-res sources (`mv doctor --install upscale`) |
+| `match` | `false` = keep this layer out of `color_match` |
 | `zoom` | `in` / `out` Ken Burns; `zoom_amount` (0.12) |
 | `fx` | per-layer effects |
-| `ramp` | speed ramp keyframes `[[shot_time, speed], ...]`, linearly interpolated (replaces `speed`) |
+| `ramp` | speed ramp keyframes `[[shot_time, speed], ...]`, linearly interpolated (replaces `speed`); `beat` = velocity edit from the beats |
 | `freeze` | `[at, hold]` - hold the frame at shot second `at` for `hold` seconds |
 | `smooth` | `true` = optical-flow frame interpolation for slow motion / ramps (CPU heavy) |
 | `blend` | makes this an overlay over the whole frame: `screen` `overlay` `softlight` `lighten` `darken` `multiply` `addition` `hardlight` `difference` `normal` |
@@ -99,6 +105,10 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 `bright[:x]` · `contrast[:x]` · `sat[:x]` · `rgbsplit[:px]` · `mirror` · `glow[:opacity]` ·
 `grade:<teal-orange|kodak|golden|moody|bleach|noir|pastel|matte|cyberpunk|cold-blue>` · `letterbox[:0.1]` ·
 `leak[:0.4]` · `bloom[:0.3]` · `handheld[:1]` · `motionblur` · `sharpen[:0.8]` · `chroma[:4]`
+Footage repair (layer fx): `stabilize[:strength]` (vidstab two-pass, cached; deshake fallback) · `denoise[:k]` ·
+`denoise_hq` · `clarity[:x]` · `lut:<file.cube>[@strength]` (any .cube LUT, path relative to the project).
+Film finishing: `filmgrain[:n]` (luma grain) · `halation[:x]` · `flare[:x]` (anamorphic streaks) · `dust[:x]` ·
+`weave[:k]` (gate weave) · `lens[:k]` (barrel + vignette).
 (shot-level `fx` apply to the composed frame; put `grade:` first)
 
 ## transition (into next shot)
@@ -107,7 +117,8 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 - `fadeblack[:d]` - dip to black
 - `dissolve[:d]` - crossfade
 - `flashblack[:d]` - quick dip to black · `glitch[:d]` - RGB split/noise/hue burst across the cut ·
-  `whip[:d]` - fast whip slide · `zoom[:d]` - zoom-through
+  `whip[:d]` - fast whip slide · `zoom[:d]` - zoom-through · `zoomblur[:d]` - punch-in with blur across the cut ·
+  `spin[:d]` - rotate + zoom across the cut · `burn[:d]` - film burn / light-leak flare · `strobe` - one-frame white flash
 - any FFmpeg xfade name with duration: `circleopen:0.5`, `wipeleft:0.4`, `slideup:0.4`, `radial:0.6`, `pixelize:0.5`,
   `hblur:0.4`, `zoomin:0.5`, `fadewhite:0.5`, `smoothleft:0.5`, `squeezev:0.4` ...
 

@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-UA = "mv-maker/0.9.0 (+https://github.com/ngoctri3110/mv-maker)"
+UA = "mv-maker/0.10.0 (+https://github.com/ngoctri3110/mv-maker)"
 VIDEO_EXT = (".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi")
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 PROVIDERS = ["pexels", "pixabay", "commons", "openverse", "youtube"]
@@ -325,8 +325,12 @@ def score_scenes(video: Path, max_scenes: int = 40) -> list[dict]:
         if e - s < 0.6:
             continue
         vals, prev, motion, faces = [], None, [], 0
-        for t in (s + (e - s) * k for k in (0.25, 0.5, 0.75)):
-            cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+        ts = [s + (e - s) * k for k in (0.25, 0.5, 0.75)]
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        cap.set(cv2.CAP_PROP_POS_MSEC, ts[0] * 1000)  # one seek per scene, then read forward (seeks snap to keyframes)
+        for j, t in enumerate(ts):
+            for _ in range(max(0, round((t - ts[j - 1]) * fps) - 1) if j else 0):
+                cap.grab()
             ok, fr = cap.read()
             if not ok:
                 continue

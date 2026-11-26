@@ -9,7 +9,7 @@ cinematic-ballad:
   description: "Warm film, cinema bars, light leaks, soft dissolves, gentle lyrics - ballads, love songs, nostalgia"
   defaults: {lyric_style: subtitle, lyric_anim: rise, caption_anim: rise, font: "Playfair Display:600i", accent: "#F2C14E",
              typo: {shadow: 1.5}}
-  shot: {fx: ["grade:kodak", "letterbox:0.08", "grain:8", "leak:0.25"], transition: "dissolve:0.8"}
+  shot: {fx: ["grade:kodak", "letterbox:0.08", "filmgrain:8", "halation:0.3", "leak:0.25"], transition: "dissolve:0.8"}
   sections:
     chorus: {fx: ["bloom:0.3"], lyric_style: karaoke}
     bridge: {fx: ["grade:noir"], transition: "fadeblack:1.0"}
@@ -18,7 +18,7 @@ tiktok-remix:
   description: "Punchy colour, beat zoom + flash, glitch/whip cuts, big kinetic lyrics - remixes, dance, viral edits"
   defaults: {lyric_style: stack, caption_anim: pop, display_font: "Anton", font: "Montserrat:800", accent: "#FF3D7F",
              typo: {upper: true}}
-  shot: {fx: ["grade:teal-orange", "sharpen:0.6"], transition: "whip:0.2"}
+  shot: {fx: ["grade:teal-orange", "clarity:0.3", "sharpen:0.5"], transition: "zoomblur:0.25"}
   sections:
     chorus: {beat_fx: [zoom, flash], beat_every: 1, transition: "glitch:0.2"}
     drop: {beat_fx: [zoom, flash, shake], beat_every: 1, transition: "flash"}
@@ -65,7 +65,7 @@ edm-neon:
 vintage-90s:
   description: "VHS home-video look, warm kodak grade, 4:3-style bars, word-by-word lyrics - throwback, nostalgia"
   defaults: {lyric_style: word, font: "VT323", accent: "#FFB347"}
-  shot: {fx: ["grade:kodak", "vhs", "grain:14", "vignette"], transition: "fadeblack:0.5"}
+  shot: {fx: ["grade:kodak", "vhs", "grain:14", "weave", "dust:0.4", "vignette"], transition: "fadeblack:0.5"}
 
 rock-grunge:
   description: "Gritty bleach grade, grain, hard cuts and shake on hits, distressed lyrics - rock, punk, band performance"
@@ -81,7 +81,7 @@ rnb-night:
   description: "Moody low-key night, soft bloom, slow dissolves, elegant karaoke lyrics - R&B, soul, late-night love"
   defaults: {lyric_style: subtitle, lyric_anim: rise, font: "Josefin Sans:600", display_font: "Playfair Display:600i",
              accent: "#C59BFF", typo: {shadow: 1.5}}
-  shot: {fx: ["grade:moody", "bloom:0.28", "grain:6"], transition: "dissolve:0.6"}
+  shot: {fx: ["grade:moody", "halation:0.35", "filmgrain:6"], transition: "dissolve:0.6"}
   sections:
     chorus: {lyric_style: karaoke, fx: ["glow:0.25"]}
     bridge: {fx: ["grade:noir"], transition: "fadeblack:0.8"}
