@@ -49,14 +49,14 @@ into the skill folder on first run.
 
 ### Claude Code - as a plugin
 ```bash
-claude plugin marketplace add YOUR_GITHUB_USER/mv-maker
+claude plugin marketplace add ngoctri3110/mv-maker
 claude plugin install mv-maker@mv-maker
 ```
-(or inside a session: `/plugin marketplace add YOUR_GITHUB_USER/mv-maker`, then `/plugin install mv-maker@mv-maker`)
+(or inside a session: `/plugin marketplace add ngoctri3110/mv-maker`, then `/plugin install mv-maker@mv-maker`)
 
 ### Claude Code and/or Codex - from a clone
 ```bash
-git clone https://github.com/YOUR_GITHUB_USER/mv-maker.git
+git clone https://github.com/ngoctri3110/mv-maker.git
 cd mv-maker
 sh install.sh            # macOS / Linux  (or: sh install.sh codex | claude)
 ```

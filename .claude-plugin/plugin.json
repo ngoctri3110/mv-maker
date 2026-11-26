@@ -5,5 +5,7 @@
   "author": { "name": "Tri Nguyen" },
   "license": "MIT",
   "icon": ".claude-plugin/icon.png",
+  "homepage": "https://github.com/ngoctri3110/mv-maker",
+  "repository": "https://github.com/ngoctri3110/mv-maker",
   "keywords": ["video", "music-video", "lyric-video", "ffmpeg", "tiktok", "youtube", "karaoke", "storyboard"]
 }
