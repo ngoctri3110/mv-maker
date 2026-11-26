@@ -5,6 +5,7 @@ title: "Demo: pop MV grammar"
 slug: genre-mv
 lang: en
 genre: pop
+platforms: [tiktok, reels, youtube]   # mv platforms --project <p>: versions, safe zones, length
 preset: pop-bright
 audio: audio/song.mp3
 format: "9:16"

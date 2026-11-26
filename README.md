@@ -23,6 +23,58 @@ animatic for you to approve, finds and downloads source clips, and renders the f
 
 *(Screenshots use synthetic test footage from `mv demo`.)*
 
+## Quick start
+In short: **give the agent the audio path (and your clips, if any), say what you want, approve twice.** The agent
+does the analysis, storyboard, footage choice, effects and rendering.
+
+**Once per machine**
+1. Install **FFmpeg** and **Python 3.10+** (the only manual installs - Python packages and fonts install themselves).
+2. Install the skill - Claude Code: `claude plugin marketplace add ngoctri3110/mv-maker` then
+   `claude plugin install mv-maker@mv-maker`; Codex: clone this repo and run `install.sh` / `install.ps1`.
+3. On first use the agent runs `mv doctor` and **asks** before installing optional extras (e.g. `match`, semantic
+   footage matching, ~1-4 GB).
+
+**What you give** - the audio path, plus anything you have:
+| You give | The agent makes |
+|---|---|
+| audio only | a lyric video from a template (generated backgrounds), or finds footage online from your description |
+| audio + one poster / cover image | a music-player style lyric video |
+| audio + a folder of your clips | picks the right moment of each clip for every shot, cut to the genre's rhythm, with effects |
+| audio + the singer performing to the song | the same, plus automatic lip-sync |
+| YouTube / TikTok / Facebook links | ranks them and downloads only the matching part, after you approve |
+
+**What the agent asks** (only what is missing): the lyrics (or it fetches synced lyrics of a released song), the mood
+and scene ideas, **the platforms** (see below), full song or a short cut, MV with footage / lyric video / poster video.
+
+**Two approval gates**: (1) the storyboard + an animatic (empty frames with music and lyrics) before any footage is
+searched or downloaded; (2) the footage list (with a copyright note) before downloading.
+
+**Example prompts**
+> Make a 9:16 TikTok MV for `D:\music\song.mp3`, my clips are in `D:\clips`. A sad break-up ballad; rain and night streets in the chorus.
+
+> Make a punk lyric video for `song.mp3` - no footage, grunge style.
+
+> Make this for TikTok, Reels and YouTube: `song.mp3` + the singer's performance take `perf.mp4`.
+
+**Good to know**: a final render takes about the song's length on a 6-core CPU (much less with a GPU) - edit on a
+light machine, render the final on a stronger one. Other people's songs and footage are copyrighted: platforms may
+mute or block the video - the agent says so before you publish.
+
+### Plan for the platform first
+Before footage is chosen the agent asks **where the video goes** and prints a plan (`mv platforms --for tiktok,youtube`):
+| | TikTok | Reels | Facebook Reels | Facebook feed | Shorts | YouTube |
+|---|---|---|---|---|---|---|
+| format | 9:16 | 9:16 | 9:16 | 4:5 | 9:16 | 16:9 |
+| max length | 10 min | 3 min | ~90 s | long | 3 min | full song |
+| performs best | 15-60 s | 15-90 s | 15-60 s | 30 s-3 min | 20-60 s | full song |
+| keep text out of | top 10 %, bottom 25 %, right 14 % | top 14 %, bottom 35 % | top 14 %, bottom 35 % | edges | top 10 %, bottom 25 % | edges |
+The plan decides: **the versions** (one edit, re-framed: `mv render <p> --format 16:9`; short cuts of the hook for
+length-capped platforms: `mv render <p> --cut 0:45-1:30`), **the source footage to look for** (vertical only →
+vertical clips; vertical + YouTube → landscape 4K with centred subjects, so one clip crops to both), **safe zones**
+(lyrics and titles are placed inside them automatically), **the hook** (best image in the first 1-3 s) and loudness
+(platforms normalise to about -14 LUFS). `mv review` adds a platform check. Numbers were checked in 2026-11 and change
+often - [`reference/platforms.md`](skills/mv-maker/reference/platforms.md).
+
 ## Features
 - **Storyboard-first workflow with 2 approval gates**: the agent writes a `storyboard.md` and renders an animatic
   (placeholder cards + real audio + lyrics + transitions) before downloading anything; the second gate is the footage list.
@@ -186,6 +238,7 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 | `mv fetch projects/x` | download sources (direct files capped at 300 MB, YouTube sections via yt-dlp) |
 | `mv sheet projects/x <id>` / `mv scenes projects/x <id>` | contact sheet with timecodes / scene cuts |
 | `mv render projects/x --mode proxy\|final [--encoder h264_nvenc]` | render |
+| `mv platforms [--for tiktok,youtube]` · `mv render projects/x --format 16:9` · `--cut 0:45-1:30` | platform plan · another aspect version · a short cut |
 | `mv fonts list\|get\|check\|preview` · `mv palette <img>` | font catalogue, download, coverage, specimen over the poster · artwork colours |
 | `mv demo [name]` | demos |
 

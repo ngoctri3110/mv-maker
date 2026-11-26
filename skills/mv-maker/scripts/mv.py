@@ -67,6 +67,7 @@ import sources as SRC  # noqa: E402
 import runtime as RT  # noqa: E402
 import gen as GEN  # noqa: E402
 import editcheck as EC  # noqa: E402
+import platforms as PL  # noqa: E402
 
 RT.apply_runtime_env()  # FFmpeg chosen with `mv doctor --use-ffmpeg` (this process only)
 
@@ -317,6 +318,11 @@ class Project:
         return 0.0
 
     def validate(self):
+        if self.sb.get("platforms"):
+            try:
+                PL.expand(self.sb["platforms"])
+            except ValueError as e:
+                die(str(e))
         for sid, info in self.sources.items():
             if (info or {}).get("gen"):
                 try:
@@ -877,7 +883,8 @@ class Renderer:
             if miss:
                 print(f"[mv] WARN: font '{nm}' lacks {''.join(miss[:20])} - those characters will fall back to another "
                       f"font. Pick a font covering the lyric language (mv fonts list --lang ...).")
-        aw = LY.AssWriter(W, H, font, display, sb.get("accent", "#FFD24D"), s0, t_end, typo, tfont, afont)
+        safe = PL.safe_zone(sb["platforms"], str(sb.get("format", "9:16"))) if sb.get("platforms") else None
+        aw = LY.AssWriter(W, H, font, display, sb.get("accent", "#FFD24D"), s0, t_end, typo, tfont, afont, safe)
 
         default_anim = sb.get("caption_anim", "fade")
         for sh in self.p.shots:
@@ -1020,6 +1027,8 @@ class Renderer:
         if n_a is not None:
             fo = float(p.sb.get("audio_fade_out", 0))
             af = f"afade=t=out:st={max(0, total - fo):.3f}:d={fo}" if fo > 0 else "anull"
+            if p.sb.get("loudness") is not None:  # only for mixes far off the platforms' ~-14 LUFS target
+                af += f",loudnorm=I={float(p.sb['loudness'])}:TP=-1:LRA=11"
             graph.append(f"[{a_src or f'{n_a}:a'}]{af}[aout]")
             a_map = ["-map", "[aout]", "-c:a", "aac", "-b:a", "256k", "-ar", "48000"]
         fscript = self.dir / "assemble.filter"
@@ -1412,7 +1421,8 @@ REVIEW_LABELS = {
                need="❓ to find", shots_head="| # | Time | Lyric / section | Intent | Technique | Layout | Layers | FX | → Transition |",
                soft="soft seam", hard="hard cut", alts="Alternatives per shot (pick to swap)",
                approve="> Approve: reply OK, or give shot id + option to change (e.g. `S03 -> option 2`).",
-               check="Edit check (genre cutting grammar)", genre="Genre", preset="Style"),
+               check="Edit check (genre cutting grammar)", genre="Genre", preset="Style",
+               platforms="Platform check"),
     "vi": dict(format="Khung hình", duration="Thời lượng", avg="trung bình", lyric="Lyric", style="kiểu", accent="màu nhấn",
                lines="câu", reading="Đọc bài hát", look="Look tổng thể", plan="Đề xuất kỹ thuật theo ý nghĩa bài hát",
                meaning="Ý nghĩa / cảm xúc", rec="⭐ Đề xuất", why="Vì sao hợp", other="Phương án khác",
@@ -1421,7 +1431,8 @@ REVIEW_LABELS = {
                need="❓ cần tìm", shots_head="| # | Thời gian | Lời / đoạn | Ý đồ | Kỹ thuật | Bố cục | Lớp hình | FX | → Chuyển |",
                soft="viền mềm", hard="cắt cứng", alts="Phương án thay thế từng shot (chọn để đổi)",
                approve="> Duyệt: trả lời OK, hoặc ghi số shot + phương án muốn đổi (vd. `S03 -> phương án 2`).",
-               check="Kiểm tra nhịp dựng (theo thể loại)", genre="Thể loại", preset="Phong cách"),
+               check="Kiểm tra nhịp dựng (theo thể loại)", genre="Thể loại", preset="Phong cách",
+               platforms="Kiểm tra theo nền tảng"),
 }
 
 
@@ -1511,6 +1522,12 @@ def cmd_review(a):
     if sb.get("genre") or any(sh.get("role") or sh.get("size") for sh in p.shots):
         res = EC.check(sb, p.shots, p.beats, p.downbeats, sb.get("lang", "en"))
         L += ["", f"## {T['check']}", ""] + EC.report_md(res)
+    if sb.get("platforms"):
+        pw = PL.check(sb, p.shots, e1 - s0, sb.get("lang", "en"))
+        pl = PL.plan(sb["platforms"], e1 - s0)
+        L += ["", f"## {T['platforms']}", "", f"- {', '.join(pl['platforms'])} · "
+              + " · ".join(f"{f}: {', '.join(n)}" for f, n in pl["versions"].items())]
+        L += [f"- ⚠ {w}" for w in pw] or ["- ✅"]
     L += ["", T["approve"]]
     out = p.root / "storyboard.md"
     out.write_text("\n".join(L) + "\n", encoding="utf-8")
@@ -1889,6 +1906,8 @@ def cmd_check(a):
     if not p.beats:
         print("[mv] (no analysis.json - beat checks skipped; run: mv analyze <project>)")
     print("\n".join(EC.report_md(res)))
+    for w in PL.check(p.sb, p.shots, tsec(p.shots[-1]["end"]) - tsec(p.shots[0]["start"]), p.sb.get("lang", "en")):
+        print(f"- ⚠ {w}")
 
 
 def cmd_genres(a):
@@ -2298,8 +2317,57 @@ def cmd_presets(a):
                 print(f"  {k:<18} {v.get('description', '')}" + (f"  [themes: {th}]" if th else ""))
 
 
+def apply_cut(p: "Project", cut: str) -> None:
+    """Short version of the same edit (e.g. the chorus for TikTok / Reels / Shorts): keep the shots inside
+    `m:ss-m:ss`, trim the first and last ones, shift in-points so the picture stays as edited."""
+    a0, _, b0 = str(cut).partition("-")
+    a0, b0 = tsec(a0), tsec(b0)
+    keep = [sh for sh in p.shots if tsec(sh["end"]) > a0 + 0.05 and tsec(sh["start"]) < b0 - 0.05]
+    if b0 <= a0 or not keep:
+        die(f"--cut {cut}: no shots in that range")
+    first, last = keep[0], keep[-1]
+    shift = a0 - tsec(first["start"])
+    if shift > 0:
+        for ly in first.get("layers") or []:
+            if isinstance(ly, dict) and ly.get("src") and ly.get("lipsync") in (None, False):
+                ly["in"] = round(tsec(ly.get("in", 0)) + shift * float(ly.get("speed", 1) or 1), 3)
+        first["start"] = a0
+    last["end"] = min(tsec(last["end"]), b0)
+    last.pop("transition", None)
+    p.shots[:] = keep
+    p._resolve_lipsync()
+    p.sb["slug"] = f"{p.sb.get('slug') or p.root.name}_cut{int(a0)}-{int(b0)}"
+    print(f"[mv] cut {fmt_t(a0)}-{fmt_t(b0)}: {len(keep)} shots")
+
+
+def cmd_platforms(a):
+    names, dur = a.names, None
+    if a.project:
+        p = Project(a.project)
+        names = names or p.sb.get("platforms")
+        dur = tsec(p.shots[-1]["end"]) - tsec(p.shots[0]["start"])
+    if not names:
+        data = PL.load()
+        print("| key | platform | format | size | max | best | hook | safe top/bottom/left/right |")
+        for k, v in data.items():
+            if k != "groups":
+                print(f"| {k} | {v['name']} | {v['format']} | {v['size'][0]}x{v['size'][1]} | {v['max_sec']}s | "
+                      f"{v['best_sec'][0]}-{v['best_sec'][1]}s | {v['hook_sec']}s | {'/'.join(f'{x:.0%}' for x in v['safe'])} |")
+        print("groups: " + ", ".join(f"{g} = {'+'.join(ks)}" for g, ks in (data.get("groups") or {}).items()))
+        print("[mv] plan for a set: mv platforms --for tiktok,youtube   (or set `platforms:` in the storyboard)")
+        return
+    try:
+        print("\n".join(PL.plan_text(PL.plan(names, dur))))
+    except ValueError as e:
+        die(str(e))
+
+
 def cmd_render(a):
     p = Project(a.project)
+    if getattr(a, "format", None):
+        p.sb["format"] = a.format
+    if getattr(a, "cut", None):
+        apply_cut(p, a.cut)
     p.validate()
     prof = DR.load_profile()
     jobs = a.jobs or prof.get("jobs") or max(1, (os.cpu_count() or 4) // 4)
@@ -2398,7 +2466,12 @@ def main():
     s.add_argument("--every", type=float, default=2.0); s.add_argument("--cols", type=int, default=6)
     s.add_argument("--rows", type=int, default=6); s.set_defaults(fn=cmd_sheet)
     s = sub.add_parser("scenes"); s.add_argument("project"); s.add_argument("source"); s.set_defaults(fn=cmd_scenes)
+    s = sub.add_parser("platforms", help="platform specs + a production plan (versions, sources, length, safe zones)")
+    s.add_argument("--for", dest="names", help="tiktok,reels,facebook_reels,facebook_feed,shorts,youtube | all | vertical")
+    s.add_argument("--project", help="use the storyboard's `platforms:` and the song length"); s.set_defaults(fn=cmd_platforms)
     s = sub.add_parser("render"); s.add_argument("project"); s.add_argument("--mode", choices=list(MODES), default="proxy")
+    s.add_argument("--format", choices=list(FORMATS), help="render another aspect version of the same edit")
+    s.add_argument("--cut", help="render only m:ss-m:ss (the short version for TikTok / Reels / Shorts)")
     s.add_argument("--encoder", default="auto"); s.add_argument("--jobs", type=int); s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_render)
     s = sub.add_parser("doctor"); s.add_argument("--quick", action="store_true", help="skip the render benchmark")

@@ -131,8 +131,5 @@ Finishing: `letterbox[:0.1]` cinema bars · `leak[:0.4]` drifting warm light lea
 - Keep faces/text out of the bottom ~20 % and right ~12 % in 9:16 (platform UI).
 
 ## Platform specs
-| Platform | Aspect / size | Notes |
-|---|---|---|
-| TikTok, Reels, Shorts, FB Reels | 9:16 1080x1920, 30 fps | hook in the first 1-3 s; Shorts ≤ 3 min |
-| YouTube | 16:9 1920x1080 / 3840x2160 | full song, lower-third lyrics |
-| Facebook feed | 4:5 1080x1350 or 1:1 | |
+See `reference/platforms.md` (TikTok, Reels, Facebook, Shorts, YouTube: format, length, safe zones, hook, loudness)
+and `mv platforms`. Plan the platforms before choosing footage.

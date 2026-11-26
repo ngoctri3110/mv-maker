@@ -18,6 +18,58 @@ tìm và tải clip nguồn, rồi render video cho TikTok, Reels, Shorts hoặc
 
 *(Ảnh chụp từ footage giả lập của lệnh `mv demo`.)*
 
+## Hướng dẫn nhanh
+Tóm lại: **đưa agent đường dẫn audio (và clip của bạn nếu có), nói ý tưởng, duyệt 2 lần.** Agent tự phân tích bài hát,
+dựng storyboard, chọn cảnh, thêm hiệu ứng và render.
+
+**Chuẩn bị một lần cho mỗi máy**
+1. Cài **FFmpeg** và **Python 3.10+** (hai thứ duy nhất phải tự cài - thư viện Python và font tự cài).
+2. Cài skill - Claude Code: `claude plugin marketplace add ngoctri3110/mv-maker` rồi
+   `claude plugin install mv-maker@mv-maker`; Codex: clone repo rồi chạy `install.sh` / `install.ps1`.
+3. Lần đầu dùng, agent chạy `mv doctor` và **hỏi** trước khi cài thêm phần tùy chọn (vd. `match` - chọn cảnh theo mô
+   tả, khoảng 1-4 GB).
+
+**Bạn đưa** - đường dẫn audio, cộng với những gì bạn có:
+| Bạn đưa | Agent làm |
+|---|---|
+| Chỉ audio | Lyric video từ mẫu (nền tự sinh), hoặc tự tìm footage trên mạng theo mô tả |
+| Audio + 1 ảnh poster | Video lyric kiểu máy phát nhạc |
+| Audio + thư mục clip của bạn | Tự chọn đúng đoạn trong từng clip cho từng shot, cắt theo nhịp thể loại, thêm hiệu ứng |
+| Audio + clip ca sĩ hát theo bài | Như trên + tự khớp khẩu hình |
+| Link YouTube / TikTok / Facebook | Xếp hạng, chỉ tải đúng đoạn khớp sau khi bạn duyệt |
+
+**Agent sẽ hỏi** (chỉ cái còn thiếu): lời bài hát (hoặc tự lấy lời có sẵn thời gian nếu bài đã phát hành), cảm xúc và ý
+tưởng cảnh, **nền tảng đăng** (xem bên dưới), cả bài hay bản ngắn, MV có footage / lyric video / video poster.
+
+**Hai lần duyệt**: (1) storyboard + video nháp (khung trống có nhạc và lyric) trước khi tìm hay tải footage;
+(2) danh sách clip (kèm lưu ý bản quyền) trước khi tải.
+
+**Ví dụ câu lệnh**
+> Làm MV TikTok 9:16 cho `D:\nhac\bai.mp3`, clip của tôi ở `D:\clips`. Bài ballad buồn về chia tay, điệp khúc muốn cảnh mưa và đường phố đêm.
+
+> Làm video lyric punk cho `song.mp3`, không có footage, phong cách grunge.
+
+> Làm cho TikTok, Reels và YouTube: `song.mp3` + clip ca sĩ hát `perf.mp4`.
+
+**Lưu ý**: render bản cuối mất khoảng bằng thời lượng bài trên CPU 6 nhân (nhanh hơn nhiều nếu có GPU) - có thể dựng
+nháp ở máy yếu, render bản cuối ở máy mạnh. Bài hát và footage của người khác có bản quyền: nền tảng có thể tắt
+tiếng hoặc chặn - agent sẽ nói rõ trước khi bạn đăng.
+
+### Lên kế hoạch theo nền tảng trước
+Trước khi chọn footage, agent hỏi **video sẽ đăng ở đâu** và in kế hoạch (`mv platforms --for tiktok,youtube`):
+| | TikTok | Reels | Facebook Reels | Facebook feed | Shorts | YouTube |
+|---|---|---|---|---|---|---|
+| khung hình | 9:16 | 9:16 | 9:16 | 4:5 | 9:16 | 16:9 |
+| dài tối đa | 10 phút | 3 phút | ~90 giây | dài | 3 phút | cả bài |
+| hiệu quả nhất | 15-60 giây | 15-90 giây | 15-60 giây | 30 giây-3 phút | 20-60 giây | cả bài |
+| tránh đặt chữ ở | trên 10 %, dưới 25 %, phải 14 % | trên 14 %, dưới 35 % | trên 14 %, dưới 35 % | mép | trên 10 %, dưới 25 % | mép |
+Kế hoạch quyết định: **các bản cần render** (một bản dựng, đổi khung: `mv render <p> --format 16:9`; bản cắt ngắn đoạn
+hook cho nền tảng giới hạn thời lượng: `mv render <p> --cut 0:45-1:30`), **loại footage cần tìm** (chỉ đăng video dọc →
+clip dọc; dọc + YouTube → clip ngang 4K, nhân vật ở giữa, để một clip cắt được cả hai khung), **vùng an toàn** (lyric và
+tiêu đề tự đặt vào trong), **hook** (hình mạnh nhất trong 1-3 giây đầu) và độ to âm thanh (nền tảng chuẩn hóa về khoảng
+-14 LUFS). `mv review` có thêm mục kiểm tra theo nền tảng. Số liệu kiểm tra 11/2026 và thay đổi thường xuyên -
+[`reference/platforms.md`](skills/mv-maker/reference/platforms.md).
+
 ## Tính năng
 - **Duyệt storyboard trước, dựng sau**, 2 bước duyệt: storyboard + video nháp (chưa cần footage), rồi danh sách clip nguồn.
 - **Phân tích bài hát**: tempo, beat, đoạn cao trào; thời gian từng chữ (Whisper) khớp với lời *bạn* đưa.

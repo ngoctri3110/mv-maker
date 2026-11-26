@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0] - 2026-11-26
+
+### Added
+
+- Platform planning before editing: `reference/platforms.yaml` + `platforms.md` (TikTok, Instagram Reels, Facebook
+  Reels / feed, YouTube Shorts, YouTube: format, length, safe zones, hook, loudness), `mv platforms [--for ...]`
+  prints the specs or a production plan (versions, master format, which source footage fits, short cut, safe zones).
+- Storyboard `platforms:` - lyrics and title cards move inside the strictest safe zone of the format; `mv review` /
+  `mv check` add a platform check (missing versions, length limits, hook, lyric area outside the safe zone).
+- `mv render --format 16:9` (another aspect version of the same edit) and `--cut m:ss-m:ss` (short versions).
+- Optional `loudness:` (loudnorm) for mixes far from the platforms' ~-14 LUFS.
+- README quick start (English + Vietnamese): what to install, what to give the agent, the two approval gates,
+  example prompts, planning for the platform.
+
 ## [0.7.0] - 2026-11-26
 
 ### Added

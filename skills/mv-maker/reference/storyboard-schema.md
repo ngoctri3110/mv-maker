@@ -7,6 +7,8 @@
 | `preset` | | style preset or lyric-video template from `reference/presets.yaml` (`mv presets`); explicit values win, shots opt out with `preset: false` |
 | `theme` | | a colour variant of the preset (`themes:` in presets.yaml), e.g. `theme: sunset` |
 | `palette` | preset's | list of colours `$1 $2 $3` used by generated backgrounds (`gen:`); pick from the cover with `mv palette` |
+| `platforms` | | where it will be posted: `tiktok` `reels` `facebook_reels` `facebook_feed` `shorts` `youtube`, or `all` / `vertical` / `meta` - lyrics move inside the strictest safe zone; `mv review` adds a platform check (`mv platforms`, platforms.md) |
+| `loudness` | | integrated LUFS target (e.g. `-14`) - only for a mix far too quiet / loud; finished masters are left alone |
 | `genre` | | cutting grammar for the edit check: `ballad` `pop` `kpop` `rap` `edm` `rock` `indie` `rnb` (`mv genres`, genres.md) |
 | `cut_lead` | 0 | cut picture this much BEFORE each shot boundary: `1f`, `2f` (frames) or seconds (≤ 0.2). Audio/lyrics unchanged |
 | `title_card` | | official-MV title: `{artist, title, sub, start, dur, style: official|center|minimal}` (official = lower-left, letter-spaced artist, "Title") |
@@ -111,3 +113,7 @@ xfade/dissolve shots get an automatic tail so music sync is kept.
 ## lyrics.yaml line extras
 `emph: "word"` - the key word of the line for `stagger` (default: the longest word). `section` - from `[Chorus]`
 headers in lyrics.txt; `mv auto` uses it to start new scenes.
+
+## Render options
+`mv render <p> --format 16:9` renders another aspect version of the same edit (output name carries the aspect);
+`--cut m:ss-m:ss` renders only that part of the song (short versions for TikTok / Reels / Shorts; output `<slug>_cutA-B_...`).

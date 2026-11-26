@@ -1,0 +1,88 @@
+# Platform specs for planning - read by `mv platforms` and `mv check` (storyboard: `platforms: [tiktok, shorts]`).
+# Checked 2026-11 against third-party spec guides (platforms publish few official numbers and change limits often):
+# verify in the platform's help centre before publishing. Human guide: reference/platforms.md.
+#   format      master aspect · size  recommended pixels · fps  recommended frame rate
+#   max_sec     longest upload that still counts as this format · best_sec  length range that performs well
+#   safe        [top, bottom, left, right] fractions of the frame covered by the app's UI (keep text/faces out)
+#   hook_sec    the viewer decides within this many seconds
+#   loudness    integrated LUFS the platform normalises to (louder audio is turned down)
+
+tiktok:
+  name: TikTok
+  format: "9:16"
+  size: [1080, 1920]
+  fps: 30
+  max_sec: 600          # in-app upload 10 min (web uploads can be longer)
+  best_sec: [15, 60]
+  safe: [0.10, 0.25, 0.06, 0.14]   # organic post: top tabs, caption + sound bar, right button column (ads: bottom 0.35)
+  hook_sec: 2
+  loudness: -14
+  notes: "1080x1920 30 fps H.264; a full song is allowed but 15-60 s cuts of the hook travel furthest. Trending sounds
+    are TikTok's own library - an uploaded commercial song can be muted."
+
+reels:
+  name: Instagram Reels
+  format: "9:16"
+  size: [1080, 1920]
+  fps: 30
+  max_sec: 180          # 3 min is shown to new audiences (longer uploads exist)
+  best_sec: [15, 90]
+  safe: [0.14, 0.35, 0.06, 0.12]   # Meta guidance: ~14 % top, ~35 % bottom, ~6 % sides
+  hook_sec: 2
+  loudness: -14
+  notes: "The 4:5 cover crop shows in the profile grid - keep the title / face inside the middle 1080x1350."
+
+facebook_reels:
+  name: Facebook Reels
+  format: "9:16"
+  size: [1080, 1920]
+  fps: 30
+  max_sec: 90           # commonly recommended; longer videos go to the regular feed
+  best_sec: [15, 60]
+  safe: [0.14, 0.35, 0.06, 0.12]
+  hook_sec: 3
+  loudness: -14
+  notes: "Same safe zones as Instagram (Meta). Cross-post from Instagram keeps one master."
+
+facebook_feed:
+  name: Facebook feed video
+  format: "4:5"
+  size: [1080, 1350]
+  fps: 30
+  max_sec: 14400
+  best_sec: [30, 180]
+  safe: [0.05, 0.12, 0.05, 0.05]
+  hook_sec: 3
+  loudness: -14
+  notes: "Most feed views are muted at first: burned-in lyrics/captions matter. 1:1 also works; 16:9 looks small on phones."
+
+shorts:
+  name: YouTube Shorts
+  format: "9:16"
+  size: [1080, 1920]
+  fps: 30
+  max_sec: 180          # raised from 60 s in Oct 2024; horizontal uploads are not Shorts
+  best_sec: [20, 60]
+  safe: [0.10, 0.25, 0.06, 0.14]
+  hook_sec: 2
+  loudness: -14
+  notes: "A Short can link to the full video - use the chorus/hook and point to the YouTube MV."
+
+youtube:
+  name: YouTube video
+  format: "16:9"
+  size: [1920, 1080]
+  fps: 30               # 24 for a cinematic look, 60 for dance / fast motion; 3840x2160 gets the better VP9/AV1 encode
+  max_sec: 43200
+  best_sec: [120, 600]
+  safe: [0.05, 0.10, 0.05, 0.05]   # title-safe margins; player controls cover the bottom ~10 % on hover
+  hook_sec: 10
+  loudness: -14
+  notes: "Full song, lower-third lyrics, a custom thumbnail. Uploading 4K (or 1440p) even from a 1080p edit gets a
+    higher bitrate encode. Content ID matches commercial songs and footage."
+
+# Groups for `--for` / `platforms:`
+groups:
+  all: [tiktok, reels, facebook_reels, shorts, youtube]
+  vertical: [tiktok, reels, facebook_reels, shorts]
+  meta: [reels, facebook_reels]

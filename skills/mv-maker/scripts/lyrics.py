@@ -124,13 +124,19 @@ TYPO_STYLES = {"lyric", "karaoke", "neon", "big", "scroll", "scrollk", "title", 
 
 class AssWriter:
     def __init__(self, W: int, H: int, font: str, display_font: str, accent: str, s0: float, t_end: float,
-                 typo: dict | None = None, title_font: str | None = None, artist_font: str | None = None):
+                 typo: dict | None = None, title_font: str | None = None, artist_font: str | None = None,
+                 safe: list | None = None):
         self.W, self.H, self.s0, self.t_end = W, H, s0, t_end
         self.base = min(W, H)
         self.lb = self.base * float((typo or {}).get("size", 1.0))  # lyric size (typo.size scales every lyric style)
         self.vertical = H > W
         self.font, self.display, self.accent = font, display_font, accent
         self.mv = int(H * (0.22 if self.vertical else 0.08))  # 9:16 keeps text above TikTok/Reels UI
+        # platform safe zone [top, bottom, left, right] (storyboard `platforms:`): lyrics stay clear of the app's UI
+        st, sbm, sl, sr = safe or (0, 0, 0, 0)
+        self.mv = max(self.mv, int(H * (sbm + 0.02)))
+        self.top = max(0.26, st + 0.02)
+        self.sx0, self.sx1 = int(W * max(0.08, sl + 0.01)), int(W * min(0.92, 1 - sr - 0.01))
         self.events: list[str] = []
         t = self.typo = dict(typo or {})
         # typo: colour / outline_color / outline / shadow / spacing / slant / upper / bold (poster-matched lettering)
@@ -223,11 +229,11 @@ class AssWriter:
     def default_area(self, style: str) -> tuple[int, int, int, int]:
         W, H = self.W, self.H
         if style in ("stack", "grunge", "paper", "stagger", "marker"):
-            return (int(W * 0.08), int(H * 0.26), int(W * 0.92), int(H * 0.70))
+            return (self.sx0, int(H * self.top), self.sx1, min(int(H * 0.70), H - self.mv))
         if style == "scroll":
-            return (int(W * 0.08), int(H * 0.52), int(W * 0.92), H - self.mv) if self.vertical else \
-                   (int(W * 0.08), int(H * 0.60), int(W * 0.92), int(H * 0.94))
-        return (int(W * 0.08), H - self.mv - int(H * 0.12), int(W * 0.92), H - self.mv)
+            return (self.sx0, int(H * 0.52), self.sx1, H - self.mv) if self.vertical else \
+                   (self.sx0, int(H * 0.60), self.sx1, min(int(H * 0.94), H - self.mv))
+        return (self.sx0, H - self.mv - int(H * 0.12), self.sx1, H - self.mv)
 
     def lyrics(self, lines: list[dict], style_for, area=None, align=None, highlight="line",
                anim="fade", lead=0.15):
@@ -472,7 +478,8 @@ class AssWriter:
             self.add(start, end, "tc_artist", f"{{\\an7\\pos({x},{y}){fade}}}{text}")
             return
         x = int(W * 0.07)
-        yb = int(H * (0.60 if self.vertical else 0.76))  # above the lyric zone (9:16 UI-safe lyrics sit lower)
+        # above the lyric zone (which moves up when a platform's safe zone is larger)
+        yb = int(min(H * (0.60 if self.vertical else 0.76), H - self.mv - H * 0.20))
         rise = int(H * 0.012)
         q = f"\u201c{title}\u201d" if title and kind == "title" else title
         self.add(start, end, "tc_title", f"{{\\an1\\move({x},{yb + rise},{x},{yb},0,600){fade}}}{_esc(q)}")

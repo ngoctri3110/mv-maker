@@ -32,6 +32,8 @@ References (read when needed):
 - `reference/matching.md` - **finding and choosing footage by description** (SigLIP 2, free, local): writing
   `look_for`, `mv scout` (search + rank + find the moment inside YouTube videos before downloading), `mv match`
   (scenes from the user's own clips for `layers: auto` shots)
+- `reference/platforms.md` - **platform specs and the pre-production plan** (TikTok, Reels, Facebook, Shorts, YouTube:
+  format, length, safe zones, hook, loudness, which sources fit); numbers in `platforms.yaml`, `mv platforms`
 - `reference/storyboard-template.yaml` - worked example of every layout
 
 **Language.** These instructions are in English, but talk to the user in *their* language and write everything they
@@ -72,6 +74,13 @@ Re-run `mv doctor` whenever a render/encode or Whisper step fails with a hardwar
 ### 1. Intake
 `mv new projects/<slug>` then collect into `brief.md`: audio file (put in `audio/`), full lyrics, the user's
 scene ideas per section, platform/aspect (9:16 vs 16:9), full song or a 60s cut. Ask only for what is missing.
+
+**Platforms first - before any footage is chosen** (`reference/platforms.md`). Ask where it will be posted (TikTok,
+Instagram Reels, Facebook, YouTube Shorts, YouTube, or all), run `mv platforms --for <list>` and present the plan
+briefly in the user's language: the versions to render (one per aspect ratio, plus a short cut where a platform caps
+length - name the section, usually the first chorus), the master `format:`, what source footage fits (orientation,
+resolution, subjects centred when one source must crop to several ratios), safe zones, the hook. Set `platforms:` and
+`format:` in the storyboard; shot choices, `focus`, the hook and the sourcing (step 5) follow this plan.
 
 Decide the **video type** early, it changes everything (details in `reference/lyrics.md`):
 A. music MV with lyrics (footage-led) · B. lyric video (text-led) · C. poster player (one cover image + lyric panel).
@@ -183,8 +192,10 @@ Install the skill on the render machine, copy `projects/<slug>` (incl. `audio/`,
 `lyrics.yaml`), then `mv doctor` on that machine, then `mv render projects/<slug> --mode final` (encoder auto = fastest working one).
 For maximum quality when time allows: `--encoder libx264`. Explicit choices: `h264_nvenc` (NVIDIA), `h264_qsv` (Intel),
 `h264_amf` (AMD), `h264_videotoolbox` (Mac).
-Output: `projects/<slug>/out/<slug>_final_<aspect>.mp4`. For a 16:9 YouTube version, copy the storyboard, set
-`format: "16:9"`, re-check `focus`/captions, render again.
+Output: `projects/<slug>/out/<slug>_final_<aspect>.mp4`. Other versions from the plan, same edit:
+`mv render <p> --mode final --format 16:9` (look at frames: re-check `focus` / captions in the new crop) and short
+cuts `mv render <p> --mode final --cut 0:45-1:30` (→ `<slug>_cut45-90_final_9x16.mp4`). `mv review` lists missing
+versions under **Platform check**.
 
 ## Rules
 - Times in storyboard = song time. `in:` = time in the ORIGINAL source video (even when only a `section` was downloaded).
