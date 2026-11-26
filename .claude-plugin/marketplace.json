@@ -1,0 +1,14 @@
+{
+  "name": "mv-maker",
+  "description": "MV Maker - music video & lyric video skill for Claude Code",
+  "owner": { "name": "Tri Nguyen" },
+  "plugins": [
+    {
+      "name": "mv-maker",
+      "source": "./",
+      "description": "Turn a song into a music video or lyric video with FFmpeg: storyboard-first workflow, soft split-screens, beat-synced effects, animated lyrics and poster-player lyric videos.",
+      "version": "0.1.0",
+      "license": "MIT"
+    }
+  ]
+}

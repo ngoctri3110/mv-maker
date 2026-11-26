@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# mv-maker launcher (macOS / Linux / Git-Bash). First run sets up .venv + fonts next to this file.
+D="$(cd "$(dirname "$0")" && pwd)"
+if [ -x "$D/.venv/bin/python" ]; then PY="$D/.venv/bin/python"
+elif [ -x "$D/.venv/Scripts/python.exe" ]; then PY="$D/.venv/Scripts/python.exe"
+else
+  echo "[mv] first run - installing dependencies..."
+  sh "$D/setup.sh" || exit 1
+  if [ -x "$D/.venv/bin/python" ]; then PY="$D/.venv/bin/python"; else PY="$D/.venv/Scripts/python.exe"; fi
+fi
+exec "$PY" "$D/scripts/mv.py" "$@"

@@ -1,0 +1,24 @@
+# environments / caches
+.venv/
+skills/mv-maker/.venv/
+__pycache__/
+*.pyc
+
+# downloaded at setup (Google Fonts, OFL) - not redistributed here
+skills/mv-maker/fonts/
+
+# user work: audio, footage, renders
+projects/
+
+# local agent wiring (install.ps1 / install.sh create links in the home folder instead)
+.claude/
+.agents/
+
+# media
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.m4a

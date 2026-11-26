@@ -1,0 +1,16 @@
+title: "Demo 6 kiểu lyric"
+slug: lyric-styles
+audio: audio/song.mp3
+format: "9:16"
+accent: "#FF5FA2"
+lyrics_file: lyrics.yaml
+sources:
+  A: {note: "Video nền A"}
+  B: {note: "Video nền B"}
+shots:
+  - {id: L1, start: 0, end: 4, lyric_style: subtitle, caption: "1 · subtitle + song ngữ", caption_style: credit, layers: [{src: A, in: 0, fx: [bright:-0.25]}], transition: dissolve:0.4}
+  - {id: L2, start: 4, end: 8, lyric_style: karaoke, caption: "2 · karaoke", caption_style: credit, layers: [{src: A, in: 5, fx: [bright:-0.25]}], transition: dissolve:0.4}
+  - {id: L3, start: 8, end: 12, lyric_style: word, caption: "3 · word (hiện từng chữ)", caption_style: credit, layers: [{src: B, in: 0, fx: [blur:12, bright:-0.2]}], transition: dissolve:0.4}
+  - {id: L4, start: 12, end: 16, lyric_style: typewriter, caption: "4 · typewriter", caption_style: credit, layers: [{src: B, in: 10, fx: [bw, blur:8, bright:-0.25]}], transition: dissolve:0.4}
+  - {id: L5, start: 16, end: 20, lyric_style: stack, caption: "5 · stack (chữ lớn xếp tầng)", caption_style: credit, layers: [{src: A, in: 20, fx: [bright:-0.3]}], transition: dissolve:0.4}
+  - {id: L6, start: 20, end: 24, lyric_style: neon, caption: "6 · neon", caption_style: credit, layers: [{src: A, in: 30, fx: [bright:-0.45, sat:0.6]}]}

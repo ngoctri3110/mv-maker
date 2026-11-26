@@ -1,0 +1,78 @@
+# storyboard.yaml schema
+
+## Top level
+| field | default | meaning |
+|---|---|---|
+| `title`, `slug`, `concept` | | display / output name / one-paragraph idea (shown in storyboard.md) |
+| `audio` | | song file, relative to project folder |
+| `format` | `9:16` | `9:16` 1080x1920 · `16:9` 1920x1080 · `1:1` · `4:5` |
+| `fps` | 30 | final fps (proxy always 24) |
+| `font` / `font_file` | Arial | caption font name / .ttf used for placeholder labels |
+| `song_start` | 0 | offset into the audio file |
+| `fade_out` / `audio_fade_out` | 1.0 / 0 | end fades (s) |
+| `sources` | | map id -> `{url, section, path, search, note, rights}` |
+| `shots` | | list, contiguous in time |
+| `captions` | [] | fine-timed lines `{start, end, text, style, anim}` (song time) |
+| `caption_anim` | fade | default caption animation: `fade` · `rise` · `pop` · `none` |
+| `lyrics_file` | | `lyrics.yaml` from `mv align` (lines with per-word timing) |
+| `lyric_style` | subtitle (scroll for poster) | `subtitle` · `karaoke` · `word` · `typewriter` · `stack` · `neon` · `scroll` (see lyrics.md) |
+| `lyric_highlight` | line | scroll only: `line` or `karaoke` (fill current line word by word) |
+| `lyric_anim` | = caption_anim | subtitle style animation |
+| `lyric_area` | auto | `[x0, y0, x1, y1]` fractions of the frame where lyrics live |
+| `font` / `display_font` | Be Vietnam Pro / Anton | lyric font / big kinetic (stack) font - run `mv fonts` once |
+| `accent` | #FFD24D | accent colour: karaoke fill, neon glow, stack highlight, progress bar |
+| `poster` | | poster player: `{title, artist, progress: true, time: true, visualizer: wave|bars|none, visualizer_color}` |
+| `song_reading`, `look` | | review only: interpretation of the song / overall palette + signature + motif |
+| `technique_plan` | | review only: list of `{section, time, meaning, recommend, why, options: [..]}` |
+| `wow_moments` | | review only: list of strings |
+
+Source file lookup: `path` if given, else `sources/<id>.(mp4|mkv|webm|mov|jpg|png...)`. Missing -> placeholder card.
+Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
+
+## Shot
+| field | meaning |
+|---|---|
+| `id` | S01... (auto if omitted) |
+| `start`, `end` | song time, seconds or `m:ss.xx` |
+| `section`, `lyric`, `intent` | documentation for review (not rendered) |
+| `layout` | `full` · `split_v` (top/bottom) · `split_h` (left/right) · `split_3v` (3 rows) · `pip` · `fit_blur` (whole source frame centred on its own blurred copy) · `poster` (cover card + blurred cover bg + player UI + lyric panel) |
+| `lyric_style` | per-shot override of the lyric style for lines starting inside this shot |
+| `ratio` | split position for split_v/split_h (0.5) |
+| `feather` | split_v/split_h only: soft seam width as a fraction of frame height/width. **Default 0.2**; `0` = hard cut, 0.3 = very dreamy |
+| `beat_fx` | beat-synced punch on the composed frame: `[zoom]`, `[flash]`, `[shake]` (any mix). Needs `analysis.json` |
+| `beat_every` | 1 = every beat, 2 = every other, 4 ≈ downbeats only (1) |
+| `beat_zoom`, `beat_flash` | pulse strength (0.07 / 0.3) |
+| `caption_anim` | per-shot override: `fade` · `rise` · `pop` · `none` |
+| `technique`, `alt` | review only: technique IDs from techniques.md / alternative options shown to the user |
+| `inset` | pip only: `{w: 0.5, aspect: "16:9", pos: tr|tl|br|bl|c}` |
+| `layers` | list (see below). First N un-blended layers fill the layout slots in order |
+| `fx` | effects on the composed frame |
+| `transition` | into the NEXT shot (see below) |
+| `caption`, `caption_style` | text for the whole shot; style `lyric` (default) · `title` · `credit` |
+
+## Layer
+| field | meaning |
+|---|---|
+| `src` | source id |
+| `in` | start time inside the original source video |
+| `speed` | 0.5 = slow-mo, 2 = fast |
+| `focus` | `[x, y]` 0..1 crop anchor when aspect differs (e.g. `[0.5, 0.3]` keep faces) |
+| `zoom` | `in` / `out` Ken Burns; `zoom_amount` (0.12) |
+| `fx` | per-layer effects |
+| `blend` | makes this an overlay over the whole frame: `screen` `overlay` `softlight` `lighten` `darken` `multiply` `addition` `hardlight` `difference` `normal` |
+| `opacity` | overlay strength (0.4) |
+| `note` | label shown on the placeholder card |
+
+## fx names
+`bw` · `vintage` · `oldfilm` · `vhs` · `grain[:n]` · `vignette` · `warm[:x]` · `cool[:x]` · `blur[:sigma]` ·
+`bright[:x]` · `contrast[:x]` · `sat[:x]` · `rgbsplit[:px]` · `mirror` · `glow[:opacity]`
+
+## transition (into next shot)
+- `cut` (default)
+- `flash[:d]` - next shot starts from white
+- `fadeblack[:d]` - dip to black
+- `dissolve[:d]` - crossfade
+- any FFmpeg xfade name with duration: `circleopen:0.5`, `wipeleft:0.4`, `slideup:0.4`, `radial:0.6`, `pixelize:0.5`,
+  `hblur:0.4`, `zoomin:0.5`, `fadewhite:0.5`, `smoothleft:0.5`, `squeezev:0.4` ...
+
+xfade/dissolve shots get an automatic tail so music sync is kept.

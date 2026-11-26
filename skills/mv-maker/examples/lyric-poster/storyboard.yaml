@@ -1,0 +1,14 @@
+title: "Mùa Hè Của Em - Lyric Video"
+slug: muahe-lyric
+audio: audio/song.mp3
+format: "9:16"
+fps: 30
+accent: "#FFB86B"
+lyrics_file: lyrics.yaml
+lyric_style: scroll
+lyric_highlight: karaoke
+poster: {title: "Mùa Hè Của Em", artist: "Ca sĩ Demo", progress: true, visualizer: wave}
+sources:
+  poster: {note: "Poster bài hát (thay bằng sources/poster.jpg của bạn)"}
+shots:
+  - {id: P01, start: 0, end: 24, layout: poster, layers: [{src: poster, zoom: in, zoom_amount: 0.04}]}
