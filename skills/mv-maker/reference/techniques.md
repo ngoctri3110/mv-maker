@@ -31,8 +31,11 @@ graphic contrast is the point, e.g. "you / me", before / after, a beat-heavy dan
 | R-BEAT-FLASH | Beat brightness flash | Stage lights, lightsticks, excitement | `beat_fx: [flash]` | ✅ |
 | R-SHAKE | Drum-hit shake | Climax, shouting, emotional burst | `beat_fx: [shake]` (sparingly, ≤ 2-4 s) | ✅ |
 | R-SLOWMO | Slow motion | Frozen moment, bridge, the key line | `speed: 0.5` (50/60 fps sources look best) | ✅ |
-| R-SPEED-RAMP | Speed ramp | A "whoosh" into a line, then slow | | 🛠 |
-| R-FREEZE | Freeze frame + text | Emphasise one line / one look | | 🛠 |
+| R-SPEED-RAMP | Speed ramp | A "whoosh" into a line, then slow | layer `ramp: [[0,1],[1.2,3],[2.2,0.4]]` (shot time, speed; interpolated) | ✅ |
+| R-FREEZE | Freeze frame + text | Emphasise one line / one look | layer `freeze: [at, hold]` + a caption | ✅ |
+| R-SMOOTH-SLOW | Optical-flow slow motion | Silky slow-mo from 24/30 fps footage | layer `speed: 0.4, smooth: true` (CPU heavy) | ✅ |
+| R-HANDHELD | Handheld drift | Intimate, documentary, lo-fi | `fx: [handheld]` (`handheld:0.5` subtler) | ✅ |
+| R-MOTION-BLUR | Motion blur | Smooth fast movement, ramps, whips | `fx: [motionblur]` | ✅ |
 
 ## 3. Transitions
 | ID | Name | Meaning | storyboard | |
@@ -43,12 +46,24 @@ graphic contrast is the point, e.g. "you / me", before / after, a beat-heavy dan
 | X-CIRCLE | Circle open | "Opening the door", entering a new world | `circleopen:0.5` | ✅ |
 | X-BLUR | Blur transition | Dreamy, drunk, dizzy | `hblur:0.4` | ✅ |
 | X-SLIDE | Slide / wipe | Energy, fun, dance | `slideup:0.3`, `wipeleft:0.3` | ✅ |
-| X-WHIP | Whip pan | Very fast change of place | approx. `smoothleft:0.2`; real one 🛠 | ✅/🛠 |
+| X-WHIP | Whip pan | Very fast change of place | `whip:0.25` (+ `motionblur` on both shots) | ✅ |
+| X-GLITCH | Glitch cut | Digital chaos, drops, rap/EDM | `glitch:0.25` (RGB split + noise + hue burst across the cut) | ✅ |
+| X-ZOOM | Zoom-through | Punch into the next scene | `zoom:0.4` | ✅ |
 | X-MATCH-CUT | Match cut | Match shape/motion across two shots (hand pushes a door → door opens in another era) - cinematic | choose `in:` with `mv sheet`, `cut` | ✅ |
 
 ## 4. Look / colour
+Colour grades (`fx: ["grade:<name>"]`, put first): `teal-orange` (blockbuster), `kodak` (warm film), `golden`
+(golden hour), `moody` (dark, desaturated), `bleach` (bleach bypass, gritty), `noir` (contrasty B&W), `pastel`
+(soft idol pop), `matte` (lifted blacks, lo-fi), `cyberpunk` (magenta/cyan night), `cold-blue` (sad, winter).
+Finishing: `letterbox[:0.1]` cinema bars · `leak[:0.4]` drifting warm light leak · `bloom[:0.3]` halation ·
+`sharpen` · `chroma[:4]` lens fringing · `grain` · `vignette`.
+
 | ID | Look | Emotion | fx |
 |---|---|---|---|
+| L-GRADE | Colour grade preset | One consistent, graded look across all shots | `grade:<name>` |
+| C-LETTERBOX | Cinema bars | "This is a film", ballads, storytelling | `letterbox:0.1` |
+| L-LEAK | Light leak | Warm memories, film, love | `leak:0.4` |
+| L-BLOOM | Bloom / halation | Dreamy highlights, stage lights, golden hour | `bloom:0.3` |
 | L-WARM-FILM | Warm film | Fond nostalgia, youth | `vintage`, `grain:8`, `warm` |
 | L-OLDFILM | Faded old film | Distant past, loss | `oldfilm` |
 | L-VHS | VHS tape | 90s, family memories, retro | `vhs` |

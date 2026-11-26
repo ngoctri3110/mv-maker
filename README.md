@@ -27,8 +27,16 @@ animatic for you to approve, finds and downloads source clips, and renders the f
   The agent reads the song, then proposes a ⭐ recommendation + alternatives per section with the reason it fits.
 - **Layouts**: full, soft-seam split top/bottom & left/right, 3-row, picture-in-picture, landscape-on-blur (`fit_blur`), poster player.
 - **Layering**: double exposure / blend modes (screen, overlay, soft light…) with opacity and blur.
-- **Looks**: vintage, old film, VHS, B&W, warm/cool, glow, grain, RGB split…
-- **Rhythm**: cuts on beats, beat-synced zoom pulse / flash / shake, slow motion, 30+ transitions (dissolve, flash, dip to black, circle open, wipes…).
+- **Looks**: 10 colour grades (teal-orange, kodak, golden, moody, bleach bypass, noir, pastel, matte, cyberpunk,
+  cold-blue), cinema bars, drifting light leaks, bloom/halation, handheld drift, motion blur, VHS, old film, grain…
+- **Rhythm**: cuts on beats, beat-synced zoom pulse / flash / shake, **speed ramps**, **freeze frames**, optical-flow
+  slow motion, 35+ transitions (dissolve, flash, glitch, whip, zoom-through, dip to black, circle open, wipes…).
+- **Style presets**: `preset: tiktok-remix` (or cinematic-ballad, kpop-stage, lofi-chill, rap-kinetic,
+  wedding-romance, edm-neon, vintage-90s) gives a coherent professional look in one line.
+- **Footage finding**: licence-aware search across Pexels, Pixabay, Wikimedia Commons, Openverse (and YouTube on
+  request) with numbered thumbnail sheets the agent looks at, picks recorded with creator + licence, auto
+  `credits.txt`; or **your own clips**, auto-split into scenes and ranked by sharpness, exposure, motion and faces.
+- **Synced lyrics in seconds** for released songs via LRCLIB, or Whisper alignment to your lyric text.
 - **Lyrics**: subtitle (bilingual), karaoke fill, word-by-word, typewriter, kinetic stack, neon, Apple-Music style scrolling.
 - **Poster player**: one cover image → lyric video with blurred backdrop, cover card, title/artist, audio visualizer,
   progress bar with time and a scrolling karaoke lyric panel.
@@ -91,7 +99,11 @@ Open the clone in Claude Code or Codex: `AGENTS.md` / `CLAUDE.md` point the agen
 ```bash
 skills/mv-maker/mv demo all        # Windows: skills\mv-maker\mv.cmd demo all
 ```
-Renders four demos into `projects/demo-*` (story MV, blend & split, lyric poster, lyric styles).
+Renders five demos into `projects/demo-*` (story MV, blend & split, lyric poster, lyric styles, pro effects) using
+synthetic media only - nothing is downloaded.
+
+Optional free API keys for better stock footage: `PEXELS_API_KEY` ([pexels.com/api](https://www.pexels.com/api/)),
+`PIXABAY_API_KEY` ([pixabay.com/api/docs](https://pixabay.com/api/docs/)). Wikimedia Commons and Openverse need none.
 
 ## Usage
 Talk to the agent, for example:
@@ -121,8 +133,12 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 | `mv analyze projects/x [--lyrics]` | tempo, beats, sections (+ Whisper word timing) |
 | `mv align projects/x` | your `lyrics.txt` + Whisper timing → `lyrics.yaml` |
 | `mv review projects/x` | `storyboard.yaml` → readable `storyboard.md` |
+| `mv find "query" --project projects/x --slot id` | licence-aware stock/CC search + numbered contact sheet |
+| `mv pick projects/x <id> <slot>:<n>` · `mv ingest projects/x <folder>` | use a candidate · register & rank your own clips |
+| `mv lyrics fetch projects/x --artist A --title T` | synced lyrics from LRCLIB |
+| `mv presets` · `mv credits projects/x` | style presets · attribution list |
 | `mv search "query"` | YouTube candidates |
-| `mv fetch projects/x` | download sources (only the needed sections) |
+| `mv fetch projects/x` | download sources (direct files capped at 300 MB, YouTube sections via yt-dlp) |
 | `mv sheet projects/x <id>` / `mv scenes projects/x <id>` | contact sheet with timecodes / scene cuts |
 | `mv render projects/x --mode proxy\|final [--encoder h264_nvenc]` | render |
 | `mv fonts list\|get\|check\|preview` · `mv palette <img>` | font catalogue, download, coverage, specimen over the poster · artwork colours |
@@ -141,6 +157,7 @@ skills/mv-maker/          the skill (portable: copy/link this folder anywhere)
   scripts/lyrics.py       lyric styles (ASS), poster layout, lyric alignment
   scripts/doctor.py       machine check, encoder tests, benchmark, recommendations
   scripts/fonts.py        font catalogue, Google Fonts downloader, glyph coverage, palette
+  scripts/sources.py      stock/CC search, contact sheets, downloads, own-footage scoring, LRCLIB
   examples/               demo storyboards
   mv, mv.cmd, setup.*     launchers + first-run setup
 .claude-plugin/           Claude Code plugin + marketplace manifest

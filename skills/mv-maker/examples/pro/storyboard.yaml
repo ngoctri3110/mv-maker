@@ -1,0 +1,67 @@
+# Pro effects showcase on synthetic footage: grades, cinema bars, light leak, handheld, bloom, motion blur,
+# speed ramp, freeze frame, glitch / whip / zoom transitions.
+title: "Demo: pro effects"
+slug: pro-effects
+lang: en
+audio: audio/song.mp3
+format: "9:16"
+fps: 30
+fade_out: 0.8
+sources:
+  A: {note: "Video A"}
+  B: {note: "Video B"}
+
+shots:
+  - id: P1
+    start: 0
+    end: 4
+    intent: "Cinematic: kodak grade + cinema bars + drifting light leak + handheld"
+    technique: [L-GRADE, C-LETTERBOX, L-LEAK, R-HANDHELD]
+    layers: [{src: A, in: 0}]
+    fx: ["grade:kodak", "handheld", "leak:0.4", "letterbox:0.09"]
+    caption: "1 · kodak + letterbox + leak + handheld"
+    caption_style: credit
+    transition: "whip:0.25"
+
+  - id: P2
+    start: 4
+    end: 8
+    intent: "Speed ramp: normal -> fast whoosh -> slow"
+    technique: [R-SPEED-RAMP, L-GRADE]
+    layers: [{src: B, in: 0, ramp: [[0, 1.0], [1.2, 3.0], [2.2, 0.4]]}]
+    fx: ["grade:teal-orange", "motionblur"]
+    caption: "2 · speed ramp + teal-orange + motion blur"
+    caption_style: credit
+    transition: "glitch:0.25"
+
+  - id: P3
+    start: 8
+    end: 12
+    intent: "Freeze frame on the key word, bloom highlights"
+    technique: [R-FREEZE, L-BLOOM]
+    layers: [{src: A, in: 20, freeze: [1.0, 1.5]}]
+    fx: ["grade:golden", "bloom:0.35"]
+    caption: "3 · freeze frame + golden + bloom"
+    caption_style: credit
+    transition: "zoom:0.35"
+
+  - id: P4
+    start: 12
+    end: 16
+    intent: "Night neon: cyberpunk grade + chroma split"
+    technique: [L-GRADE, L-GLITCH]
+    layers: [{src: B, in: 20}]
+    fx: ["grade:cyberpunk", "chroma:4", "sharpen"]
+    caption: "4 · cyberpunk + chroma"
+    caption_style: credit
+    transition: "flashblack:0.3"
+
+  - id: P5
+    start: 16
+    end: 20
+    intent: "Noir ending with cinema bars"
+    technique: [L-GRADE, C-LETTERBOX]
+    layers: [{src: A, in: 40}]
+    fx: ["grade:noir", "grain:12", "letterbox:0.12", "vignette"]
+    caption: "5 · noir + grain"
+    caption_style: credit

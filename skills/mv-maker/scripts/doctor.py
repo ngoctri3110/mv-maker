@@ -218,6 +218,12 @@ def build(run_bench: bool = True) -> dict:
         heavy = "fast on this GPU" if has_nvidia else "slow on CPU (several minutes per song)"
         rec("demucs", "optional", f"Vocal separation for much better lyric timing on dense mixes - ~2 GB (PyTorch), {heavy}.",
             auto="pip install demucs")
+    missing_keys = [k for k in ("PEXELS_API_KEY", "PIXABAY_API_KEY") if not os.environ.get(k)]
+    if missing_keys:
+        rec("stock-keys", "optional", f"Free API keys widen licence-clear footage search ({', '.join(missing_keys)} not set); "
+            "Wikimedia Commons and Openverse work without keys.",
+            manual="Get keys at https://www.pexels.com/api/ and https://pixabay.com/api/docs/, then set them as user "
+                   "environment variables (Windows: setx PEXELS_API_KEY <key>; macOS/Linux: export in ~/.zshrc or ~/.bashrc)")
     if hw["disk_free_gb"] < 20:
         rec("disk", "recommended", f"Only {hw['disk_free_gb']} GB free here; downloads + renders of one MV can take 5-15 GB.",
             manual="Free space or work in a project folder on a bigger drive.")

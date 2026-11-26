@@ -4,6 +4,7 @@
 | field | default | meaning |
 |---|---|---|
 | `title`, `slug`, `concept` | | display / output name / one-paragraph idea (shown in storyboard.md) |
+| `preset` | | style preset from `reference/presets.yaml` (`mv presets`); explicit values win, shots opt out with `preset: false` |
 | `lang` | en | language of the `storyboard.md` labels (`en`, `vi`; others fall back to `en`) - set to the user's language |
 | `audio` | | song file, relative to project folder |
 | `format` | `9:16` | `9:16` 1080x1920 · `16:9` 1920x1080 · `1:1` · `4:5` |
@@ -29,6 +30,8 @@
 | `wow_moments` | | review only: list of strings |
 
 Source file lookup: `path` if given, else `sources/<id>.(mp4|mkv|webm|mov|jpg|png...)`. Missing -> placeholder card.
+`picks.yaml` (written by `mv pick` / `mv ingest`) is merged over `sources:` - it adds `url`, `provider`, `creator`,
+`rights`, `page` or a local `path` without touching storyboard.yaml.
 Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 
 ## Shot
@@ -61,19 +64,27 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 | `focus` | `[x, y]` 0..1 crop anchor when aspect differs (e.g. `[0.5, 0.3]` keep faces) |
 | `zoom` | `in` / `out` Ken Burns; `zoom_amount` (0.12) |
 | `fx` | per-layer effects |
+| `ramp` | speed ramp keyframes `[[shot_time, speed], ...]`, linearly interpolated (replaces `speed`) |
+| `freeze` | `[at, hold]` - hold the frame at shot second `at` for `hold` seconds |
+| `smooth` | `true` = optical-flow frame interpolation for slow motion / ramps (CPU heavy) |
 | `blend` | makes this an overlay over the whole frame: `screen` `overlay` `softlight` `lighten` `darken` `multiply` `addition` `hardlight` `difference` `normal` |
 | `opacity` | overlay strength (0.4) |
 | `note` | label shown on the placeholder card |
 
 ## fx names
 `bw` · `vintage` · `oldfilm` · `vhs` · `grain[:n]` · `vignette` · `warm[:x]` · `cool[:x]` · `blur[:sigma]` ·
-`bright[:x]` · `contrast[:x]` · `sat[:x]` · `rgbsplit[:px]` · `mirror` · `glow[:opacity]`
+`bright[:x]` · `contrast[:x]` · `sat[:x]` · `rgbsplit[:px]` · `mirror` · `glow[:opacity]` ·
+`grade:<teal-orange|kodak|golden|moody|bleach|noir|pastel|matte|cyberpunk|cold-blue>` · `letterbox[:0.1]` ·
+`leak[:0.4]` · `bloom[:0.3]` · `handheld[:1]` · `motionblur` · `sharpen[:0.8]` · `chroma[:4]`
+(shot-level `fx` apply to the composed frame; put `grade:` first)
 
 ## transition (into next shot)
 - `cut` (default)
 - `flash[:d]` - next shot starts from white
 - `fadeblack[:d]` - dip to black
 - `dissolve[:d]` - crossfade
+- `flashblack[:d]` - quick dip to black · `glitch[:d]` - RGB split/noise/hue burst across the cut ·
+  `whip[:d]` - fast whip slide · `zoom[:d]` - zoom-through
 - any FFmpeg xfade name with duration: `circleopen:0.5`, `wipeleft:0.4`, `slideup:0.4`, `radial:0.6`, `pixelize:0.5`,
   `hblur:0.4`, `zoomin:0.5`, `fadewhite:0.5`, `smoothleft:0.5`, `squeezev:0.4` ...
 

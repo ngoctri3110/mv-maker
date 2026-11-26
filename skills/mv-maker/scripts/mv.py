@@ -14,7 +14,14 @@ Subcommands:
   palette  <image>                   dominant colours (accent / text colour picks)
   review   <project>                 storyboard.yaml -> storyboard.md (for human approval)
   search   "query" [-n 10]           list YouTube candidates (id | title | duration | url)
-  fetch    <project>                 download every source that has a url (yt-dlp)
+  find     "query" --project p --slot id [--type video|image] [--providers pexels,pixabay,commons,openverse,youtube]
+                                     licence-aware search + numbered contact sheet refs/cand_<slot>.jpg
+  pick     <project> <source_id> <slot:n>   use candidate n for a source (written to picks.yaml)
+  ingest   <project> <folder>        register your own clips/photos, rank best moments (refs/ingest_best.jpg)
+  lyrics   fetch <project> --artist A --title T   synced lyrics from LRCLIB -> lyrics.yaml
+  presets                            list style presets (storyboard: preset: <name>)
+  credits  <project>                 out/credits.txt for the video description
+  fetch    <project>                 download every source that has a url (direct or yt-dlp)
   sheet    <project> <source_id>     contact sheet with timecodes, to pick in-points
   scenes   <project> <source_id>     scene-cut list (PySceneDetect)
   render   <project> --mode proxy|final [--encoder libx264|h264_nvenc|hevc_nvenc|h264_qsv]
@@ -28,6 +35,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -43,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lyrics as LY  # noqa: E402
 import doctor as DR  # noqa: E402
 import fonts as FT  # noqa: E402
+import sources as SRC  # noqa: E402
 
 # Shot cache key includes the renderer source, so code changes re-render cached shots.
 ENGINE_HASH = hashlib.sha1(b"".join(p.read_bytes() for p in sorted(Path(__file__).resolve().parent.glob("*.py")))).hexdigest()[:10]
@@ -118,6 +127,39 @@ def run(cmd: list[str], cwd: Path | None = None, quiet: bool = True):
     return r
 
 
+# --------------------------------------------------------------------------- presets
+def load_presets() -> dict:
+    return yaml.safe_load((Path(__file__).resolve().parent.parent / "reference" / "presets.yaml").read_text(encoding="utf-8"))
+
+
+def apply_preset(sb: dict, shots: list) -> None:
+    presets = load_presets()
+    pr = presets.get(sb["preset"])
+    if not pr:
+        die(f"unknown preset '{sb['preset']}' - one of {sorted(presets)}")
+    for k, v in (pr.get("defaults") or {}).items():
+        if k == "typo":
+            sb["typo"] = {**v, **(sb.get("typo") or {})}
+        else:
+            sb.setdefault(k, v)
+    base = pr.get("shot") or {}
+    for sh in shots:
+        if sh.get("preset") is False:
+            continue
+        extra = {}
+        sec = str(sh.get("section", "")).lower()
+        for key, val in (pr.get("sections") or {}).items():
+            if key in sec:
+                extra = val
+        sh["fx"] = list(base.get("fx") or []) + list(extra.get("fx") or []) + list(sh.get("fx") or [])
+        for k in ("transition",):
+            if k not in sh and (extra.get(k) or base.get(k)):
+                sh[k] = extra.get(k) or base.get(k)
+        for k in ("beat_fx", "beat_every", "lyric_style"):
+            if k not in sh and k in extra:
+                sh[k] = extra[k]
+
+
 # --------------------------------------------------------------------------- project
 class Project:
     def __init__(self, root: str | Path):
@@ -127,9 +169,15 @@ class Project:
             die(f"{sb_path} not found (run: mv.py new {root})")
         self.sb = yaml.safe_load(sb_path.read_text(encoding="utf-8")) or {}
         self.sources: dict = self.sb.get("sources") or {}
+        picks = self.root / "picks.yaml"  # written by `mv pick` / `mv ingest` - never rewrites storyboard.yaml
+        if picks.exists():
+            for sid, info in (yaml.safe_load(picks.read_text(encoding="utf-8")) or {}).items():
+                self.sources[sid] = {**(self.sources.get(sid) or {}), **(info or {})}
         self.shots: list = self.sb.get("shots") or []
         if not self.shots:
             die("storyboard has no shots")
+        if self.sb.get("preset"):
+            apply_preset(self.sb, self.shots)
         self.build = self.root / "build"
         self.out = self.root / "out"
         an = self.root / "analysis.json"
@@ -205,12 +253,20 @@ class Project:
 
 
 def parse_transition(v) -> tuple[str, str, float]:
-    """-> (kind, name, duration). kind: cut | flash | fadeblack | xfade."""
+    """-> (kind, name, duration). kind: cut | flash | fadeblack | glitch | xfade."""
     v = str(v or "cut").strip()
     name, _, d = v.partition(":")
     dur = float(d) if d else 0.5
     if name in ("cut", "", "none"):
         return ("cut", "cut", 0.0)
+    if name == "glitch":
+        return ("glitch", "glitch", float(d) if d else 0.25)
+    if name == "flashblack":
+        return ("fadeblack", "fadeblack", float(d) if d else 0.3)
+    if name == "whip":
+        return ("xfade", "smoothleft", float(d) if d else 0.25)
+    if name == "zoom":
+        return ("xfade", "zoomin", float(d) if d else 0.4)
     if name == "flash":
         return ("flash", "flash", float(d) if d else 0.25)
     if name == "fadeblack" and not d:
@@ -225,12 +281,61 @@ def parse_transition(v) -> tuple[str, str, float]:
 
 
 # --------------------------------------------------------------------------- effects
-def fx_filters(fx_list, label: str) -> list[str]:
+# Colour grades (fx: grade:<name>) - built from curves/colorbalance/eq, no LUT files needed.
+GRADES = {
+    "teal-orange": "colorbalance=rs=-0.08:gs=-0.02:bs=0.12:rh=0.12:gh=0.02:bh=-0.10,eq=saturation=1.15:contrast=1.06",
+    "kodak": "curves=all='0/0.03 0.5/0.53 1/0.97',colorbalance=rm=0.06:gm=0.01:bm=-0.05,eq=saturation=1.08",
+    "golden": "colorbalance=rm=0.08:gm=0.03:bm=-0.08:rh=0.06:bh=-0.06,eq=saturation=1.1:brightness=0.02",
+    "moody": "eq=brightness=-0.04:contrast=1.15:saturation=0.8,colorbalance=bs=0.06:bm=0.04",
+    "bleach": "eq=saturation=0.45:contrast=1.25,curves=all='0/0 0.25/0.18 0.75/0.85 1/1'",
+    "noir": "hue=s=0,eq=contrast=1.4:brightness=-0.03,curves=all='0/0 0.3/0.2 0.7/0.85 1/1'",
+    "pastel": "eq=saturation=0.75:brightness=0.05:contrast=0.9,colorbalance=rh=0.05:bh=0.06",
+    "matte": "curves=all='0/0.08 1/0.94',eq=saturation=0.9",
+    "cyberpunk": "colorbalance=rs=0.15:bs=0.2:gm=-0.08:rh=0.1:bh=0.15,eq=saturation=1.35:contrast=1.1",
+    "cold-blue": "colorbalance=rs=-0.1:bs=0.15:rm=-0.05:bm=0.08,eq=saturation=0.85:contrast=1.08",
+}
+
+
+def fx_filters(fx_list, label: str, w: int | None = None, h: int | None = None, fps: int = 30) -> list[str]:
     out: list[str] = []
     for n, raw in enumerate(fx_list or []):
         name, _, arg = str(raw).partition(":")
+        if name == "grade":
+            if arg not in GRADES:
+                die(f"unknown grade '{arg}' - one of {sorted(GRADES)}")
+            out.append(GRADES[arg])
+            continue
         a = float(arg) if arg else None
-        if name == "bw":
+        p = f"{label}x{n}"
+        if name == "letterbox":  # cinema bars, a = bar height as a fraction of the frame
+            b = a or 0.1
+            out.append(f"drawbox=x=0:y=0:w=iw:h=ih*{b}:color=black:t=fill,"
+                       f"drawbox=x=0:y=ih-ih*{b}:w=iw:h=ih*{b}:color=black:t=fill")
+        elif name == "leak":  # procedural drifting light leak (no stock clip needed)
+            if not (w and h):
+                die("leak needs a known frame size")
+            # blend in RGB: screen-blending YUV chroma planes tints the whole frame purple
+            out.append(f"format=gbrp[{p}a];gradients=s={w}x{h}:type=radial:x0=0:y0={int(h * 0.12)}:"
+                       f"x1={int(w * 0.7)}:y1={int(h * 0.54)}:c0=0xffc070:c1=0xff5a50:c2=0x000000:nb_colors=3:"
+                       f"speed=0.02:rate={fps},format=gbrp,gblur=sigma={max(20, w // 14)}[{p}g];"
+                       f"[{p}a][{p}g]blend=all_mode=screen:all_opacity={a or 0.4}:shortest=1")
+        elif name == "handheld":  # gentle camera drift / breathing
+            if not (w and h):
+                die("handheld needs a known frame size")
+            k = a or 1.0
+            out.append(f"crop=w=iw*0.93:h=ih*0.93:x='(iw-ow)/2+iw*{0.010 * k:.4f}*sin(t*1.9)+iw*{0.005 * k:.4f}*sin(t*4.3)':"
+                       f"y='(ih-oh)/2+ih*{0.008 * k:.4f}*sin(t*1.4+1.3)',scale={w}:{h}")
+        elif name == "motionblur":
+            out.append("tmix=frames=3:weights='1 2 1'")
+        elif name == "bloom":  # warm halation around highlights
+            out.append(f"format=gbrp,split[{p}a][{p}b];[{p}b]gblur=sigma=22,colorchannelmixer=rr=1:gg=0.62:bb=0.42[{p}c];"
+                       f"[{p}a][{p}c]blend=all_mode=screen:all_opacity={a or 0.32}")
+        elif name == "sharpen":
+            out.append(f"unsharp=5:5:{a or 0.8}")
+        elif name == "chroma":
+            px = int(a or 4)
+            out.append(f"rgbashift=rh=-{px}:bh={px}:rv={px // 2}")
+        elif name == "bw":
             out.append("hue=s=0")
         elif name == "vintage":
             out += ["curves=preset=vintage", "colorbalance=rs=0.06:bs=-0.08", "eq=saturation=0.85"]
@@ -262,11 +367,46 @@ def fx_filters(fx_list, label: str) -> list[str]:
             out.append("hflip")
         elif name == "glow":
             p = f"{label}g{n}"
-            out.append(f"split[{p}a][{p}b];[{p}b]gblur=sigma=14[{p}c];"
+            out.append(f"format=gbrp,split[{p}a][{p}b];[{p}b]gblur=sigma=14[{p}c];"
                        f"[{p}a][{p}c]blend=all_mode=screen:all_opacity={a or 0.45}")
         else:
             die(f"unknown fx '{raw}' (see reference/techniques.md)")
     return out
+
+
+def ramp_segments(keys, out_len: float, step: float = 0.1) -> list[tuple[float, float, float]]:
+    """Speed ramp keyframes [[shot_time, speed], ...] -> piecewise segments (out_start, in_start, speed),
+    speeds linearly interpolated every `step` s; last element is (out_len, in_total, 0)."""
+    step = max(step, out_len / 40)  # keep the nested setpts expression small
+    keys = sorted((float(t), float(s)) for t, s in keys)
+    if keys[0][0] > 0:
+        keys.insert(0, (0.0, keys[0][1]))
+
+    def speed_at(t):
+        for (t0, s0), (t1, s1) in zip(keys, keys[1:]):
+            if t0 <= t < t1:
+                return s0 + (s1 - s0) * (t - t0) / (t1 - t0)
+        return keys[-1][1]
+
+    segs, t, src = [], 0.0, 0.0
+    while t < out_len - 1e-6:
+        dt = min(step, out_len - t)
+        sp = max(0.05, speed_at(t + dt / 2))
+        segs.append((t, src, sp))
+        t += dt
+        src += dt * sp
+    segs.append((out_len, src, 0.0))
+    return [(round(a, 4), round(b, 4), round(c, 4)) for a, b, c in segs]
+
+
+def ramp_expr(segs) -> str:
+    """setpts expression mapping input time T -> output time for ramp_segments()."""
+    body = segs[:-1]
+    o, i, s = body[-1]
+    e = f"{o}+(T-{i})/{s}"
+    for (o, i, s), (_, i_next, _) in zip(reversed(body[:-1]), reversed(body[1:])):
+        e = f"if(lt(T,{i_next}),{o}+(T-{i})/{s},{e})"
+    return e
 
 
 def cover(w: int, h: int, focus) -> str:
@@ -358,9 +498,11 @@ class Renderer:
             args = ["-loop", "1", "-framerate", str(self.fps), "-t", f"{need:.3f}", "-i", str(f)]
         elif f is not None:
             start = max(0.0, tsec(ly.get("in", 0)) - self.p.source_offset(sid))
-            src_need = need * speed + 0.5
+            ramp = ramp_segments(ly.get("ramp"), need) if ly.get("ramp") else None
+            src_need = (ramp[-1][1] if ramp else need * speed) + 0.5
             args = ["-stream_loop", "-1", "-ss", f"{start:.3f}", "-t", f"{src_need:.3f}", "-i", str(f)]
-            chain.append(f"setpts=(PTS-STARTPTS)/{speed}")
+            chain.append("setpts=PTS-STARTPTS")
+            chain.append(f"setpts='({ramp_expr(ramp)})/TB'" if ramp else f"setpts=PTS/{speed}")
         else:  # placeholder card for the animatic
             color = PLACEHOLDER_COLORS[int(hashlib.md5(str(sid).encode()).hexdigest(), 16) % len(PLACEHOLDER_COLORS)]
             args = ["-f", "lavfi", "-t", f"{need:.3f}", "-i", f"color=c={color}:s={w}x{h}:r={self.fps}"]
@@ -381,7 +523,16 @@ class Renderer:
                             f"fontsize={fs}:line_spacing={fs // 3}:x=(w-text_w)/2:y=(h-text_h)/2:"
                             f"box=1:boxcolor=black@0.45:boxborderw={fs // 2}")
         fit = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos" if contain else cover(w, h, ly.get("focus"))
-        chain += [f"fps={self.fps}", fit]
+        if f is not None and ly.get("smooth") and (speed < 1 or ly.get("ramp")):
+            # optical-flow frame interpolation for silky slow motion (CPU heavy; scale first to keep it bearable)
+            chain += [fit, f"minterpolate=fps={self.fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1", f"fps={self.fps}"]
+        else:
+            chain += [f"fps={self.fps}", fit]
+        fr = ly.get("freeze")
+        if fr:  # [at, duration] in shot seconds: hold that frame, then continue
+            at, hold = float(fr[0]), float(fr[1])
+            chain += [f"loop=loop={max(1, int(hold * self.fps))}:size=1:start={int(at * self.fps)}",
+                      f"setpts=N/{self.fps}/TB"]
         z = None if contain else ly.get("zoom")
         if z:
             amt = float(ly.get("zoom_amount", 0.12))
@@ -389,7 +540,7 @@ class Renderer:
             zexpr = f"1+{amt}*on/{frames}" if z == "in" else f"{1 + amt}-{amt}*on/{frames}"
             chain += [f"scale={2 * w}:{2 * h}",
                       f"zoompan=z='{zexpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={w}x{h}:fps={self.fps}"]
-        chain += fx_filters(list(ly.get("fx") or []) + list(extra_fx or []), lab)
+        chain += fx_filters(list(ly.get("fx") or []) + list(extra_fx or []), lab, w, h, self.fps)
         if f is None:
             chain.append(label_filter)  # after zoom/fx so the card text stays readable
         chain += [f"tpad=stop_mode=clone:stop_duration={need:.3f}", f"trim=duration={need:.3f}",
@@ -546,13 +697,19 @@ class Renderer:
             graph.append(f"[{cur}][{lab}]blend=all_mode={mode}:all_opacity={op}[ov{k}]")
             cur = f"ov{k}"
 
-        post = fx_filters(sh.get("fx"), f"{sid}s")
+        post = fx_filters(sh.get("fx"), f"{sid}s", W, H, fps)
         post += self.beat_filters(sh, s, e, need)
         pk, _, pd = parse_transition(self.p.shots[i - 1].get("transition", "cut")) if i > 0 else ("cut", "", 0)
+        glitch = ("rgbashift=rh=-22:bh=22:gv=6:enable='{w}',noise=alls=45:allf=t:enable='{w}',"
+                  "hue=h=70:s=1.6:enable='{w}'")
         if pk == "flash":
             post.append(f"fade=t=in:st=0:d={pd}:color=white")
         elif pk == "fadeblack":
             post.append(f"fade=t=in:st=0:d={pd / 2:.3f}")
+        elif pk == "glitch":
+            post.append(glitch.format(w=f"lt(t,{pd:.3f})"))
+        if kind == "glitch":
+            post.append(glitch.format(w=f"gt(t,{dur - d:.3f})"))
         if i == 0 and sh.get("fade_in", True):
             post.append("fade=t=in:st=0:d=0.4")
         if kind == "fadeblack":
@@ -561,7 +718,7 @@ class Renderer:
             fo = float(self.p.sb.get("fade_out", 1.0))
             if fo > 0:
                 post.append(f"fade=t=out:st={max(0, dur - fo):.3f}:d={fo}")
-        post += [f"trim=duration={need:.3f}", "setpts=PTS-STARTPTS", "format=yuv420p"]
+        post += [f"trim=duration={need:.3f}", "setpts=PTS-STARTPTS", "setsar=1", "format=yuv420p"]
         graph.append(f"[{cur}]" + ",".join(post) + "[vout]")
 
         fscript = self.dir / "shots" / f"{i:03d}_{sid}.filter"
@@ -691,7 +848,7 @@ class Renderer:
         for f in shot_files:
             args += ["-i", str(f.relative_to(self.dir))]
         for i in range(len(shot_files)):  # identical timebase so concat and xfade can be mixed
-            graph.append(f"[{i}:v]fps={self.fps},settb=AVTB,setpts=PTS-STARTPTS[n{i}]")
+            graph.append(f"[{i}:v]fps={self.fps},settb=AVTB,setpts=PTS-STARTPTS,setsar=1[n{i}]")
         acc = "n0"
         for i in range(1, len(shot_files)):
             kind, name, d = parse_transition(p.shots[i - 1].get("transition", "cut"))
@@ -871,7 +1028,7 @@ def whisper_words(audio: Path, model: str, lang: str):
 
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
-DEMOS = ["story", "blur", "lyric-poster", "lyric-styles"]
+DEMOS = ["story", "blur", "lyric-poster", "lyric-styles", "pro"]
 DEMO_ASSETS = {"singer_live": "bars", "A": "bars", "fans_light": "fractal", "B": "fractal",
                "memory_overlay": "photo", "C": "photo", "poster": "poster"}
 
@@ -1189,12 +1346,177 @@ def cmd_search(a):
     print(r.stdout.strip())
 
 
+def _sheet_font() -> Path:
+    f = LY.FONTS_DIR / "BeVietnamPro-SemiBold.ttf"
+    return f if f.exists() else Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "arial.ttf"
+
+
+def _save_picks(root: Path, updates: dict):
+    f = root / "picks.yaml"
+    cur = (yaml.safe_load(f.read_text(encoding="utf-8")) or {}) if f.exists() else {}
+    cur.update(updates)
+    f.write_text("# written by mv pick / mv ingest - merged over storyboard sources\n" +
+                 yaml.safe_dump(cur, allow_unicode=True, sort_keys=False, width=200), encoding="utf-8")
+
+
+def cmd_find(a):
+    provs = [x.strip() for x in a.providers.split(",")] if a.providers else None
+    if provs and set(provs) - set(SRC.PROVIDERS):
+        die(f"providers: {SRC.PROVIDERS}")
+    cands, notes = SRC.find(a.query, a.type, provs, a.orient, a.n)
+    print(f"[mv] '{a.query}' ({a.type}) - " + " · ".join(notes))
+    if not cands:
+        die("no results - try other words (English works best), --type image, or other --providers")
+    root = Path(a.project) if a.project else Path(".")
+    slot = a.slot or re.sub(r"[^a-z0-9]+", "_", a.query.lower()).strip("_")[:30]
+    sheet = root / "refs" / f"cand_{slot}.jpg"
+    sheet.parent.mkdir(parents=True, exist_ok=True)
+    made = SRC.contact_sheet(cands, sheet, root / "build" / "cand" / slot, _sheet_font())
+    if made:
+        cands = [c for c in cands if c.get("_sheet")]  # numbers on the sheet == candidate numbers
+    cdir = root / "candidates"
+    cdir.mkdir(exist_ok=True)
+    (cdir / f"{slot}.json").write_text(json.dumps(cands, ensure_ascii=False, indent=1), encoding="utf-8")
+    for i, c in enumerate(cands, 1):
+        size = f"{c.get('w') or '?'}x{c.get('h') or '?'}"
+        dur = f" {float(c['duration']):.0f}s" if c.get("duration") else ""
+        print(f"  {i:2d}. [{c['provider']}] {size}{dur}  {str(c.get('title', ''))[:50]}  - {c.get('creator', '')[:24]}  | {c['license'][:40]}")
+    print(f"[mv] contact sheet: {sheet if made else '(no thumbnails)'}  ·  pick with: mv pick {root} <source_id> {slot}:<n>")
+
+
+def cmd_pick(a):
+    root = Path(a.project)
+    slot, _, num = a.candidate.rpartition(":")
+    f = root / "candidates" / f"{slot or a.source}.json"
+    if not f.exists():
+        die(f"{f} not found - run mv find first")
+    cands = json.loads(f.read_text(encoding="utf-8"))
+    k = int(num) - 1
+    if not 0 <= k < len(cands):
+        die(f"candidate {num} out of range 1..{len(cands)}")
+    c = cands[k]
+    entry = {"url": c["url"], "provider": c["provider"], "kind": c["kind"], "page": c.get("page"),
+             "title": c.get("title"), "creator": c.get("creator"), "rights": c["license"]}
+    if a.section:
+        entry["section"] = a.section
+    _save_picks(root, {a.source: entry})
+    print(f"[mv] {a.source} <- [{c['provider']}] {c.get('title', '')[:60]}  ({c['license'][:50]})")
+    if c["provider"] == "youtube":
+        print("[mv] NOTE: YouTube footage is normally copyrighted - confirm permission with the user before publishing")
+
+
+def cmd_ingest(a):
+    """Register the user's own clips/photos as sources and rank their best moments."""
+    root = Path(a.project)
+    folder = Path(a.folder)
+    if not folder.is_dir():
+        die(f"{folder} is not a folder")
+    files = sorted(p for p in folder.rglob("*") if p.suffix.lower() in SRC.VIDEO_EXT + SRC.IMAGE_EXT)
+    if not files:
+        die("no video/image files found")
+    picks, moments = {}, []
+    work = root / "build" / "ingest"
+    work.mkdir(parents=True, exist_ok=True)
+    for n, fpath in enumerate(files, 1):
+        sid = f"{a.prefix}{n}"
+        picks[sid] = {"path": str(fpath.resolve()), "provider": "own", "rights": SRC.LICENSES["own"],
+                      "title": fpath.name, "kind": "image" if fpath.suffix.lower() in SRC.IMAGE_EXT else "video"}
+        if picks[sid]["kind"] == "image":
+            moments.append({"src": sid, "in": 0, "score": 0.5, "file": fpath.name, "thumb": str(fpath)})
+            continue
+        print(f"[mv] scoring {fpath.name} ...")
+        for sc in SRC.score_scenes(fpath):
+            mid = (sc["start"] + sc["end"]) / 2
+            th = work / f"{sid}_{int(mid * 10)}.jpg"
+            run(["ffmpeg", "-v", "error", "-y", "-ss", f"{mid:.2f}", "-i", str(fpath), "-frames:v", "1",
+                 "-vf", "scale=320:-2", str(th)])
+            moments.append({"src": sid, "in": sc["start"], "end": sc["end"], **sc, "file": fpath.name, "thumb": str(th)})
+    _save_picks(root, picks)
+    moments.sort(key=lambda m: m["score"], reverse=True)
+    best = moments[: a.top]
+    (root / "candidates").mkdir(exist_ok=True)
+    (root / "candidates" / "ingest.json").write_text(json.dumps(moments, ensure_ascii=False, indent=1), encoding="utf-8")
+    sheet = root / "refs" / "ingest_best.jpg"
+    sheet.parent.mkdir(exist_ok=True)
+    SRC.contact_sheet(best, sheet, work / "sheet", _sheet_font(), cols=6)
+    for i, m in enumerate(best, 1):
+        extra = f"{m['start']:.1f}-{m['end']:.1f}s sharp {m['sharpness']:.0f} motion {m['motion']:.1f} faces {m['faces']}" \
+            if "sharpness" in m else "photo"
+        print(f"  {i:2d}. {m['src']:<8} in: {m['in']:<6} score {m['score']:.2f}  {extra}  ({m['file']})")
+    print(f"[mv] {len(files)} files registered in picks.yaml as {a.prefix}1..{a.prefix}{len(files)} · best moments: {sheet}")
+
+
+def cmd_credits(a):
+    p = Project(a.project)
+    print(write_credits(p))
+
+
+def write_credits(p: Project) -> Path:
+    used = []
+    for sh in p.shots:
+        for ly in sh.get("layers") or []:
+            if ly.get("src") and ly["src"] not in used:
+                used.append(ly["src"])
+    lines = [f"Credits - {p.sb.get('title', p.root.name)}", ""]
+    for sid in used:
+        s = p.sources.get(sid) or {}
+        if s.get("provider") == "own" or not (s.get("url") or s.get("page")):
+            continue
+        lines.append(f"- {s.get('title') or sid} by {s.get('creator') or 'unknown'} ({s.get('provider', 'web')}) - "
+                     f"{s.get('rights') or 'licence unknown'} - {s.get('page') or s.get('url')}")
+    if len(lines) == 2:
+        lines.append("(no third-party footage)")
+    p.out.mkdir(exist_ok=True)
+    out = p.out / "credits.txt"
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out
+
+
+def cmd_lyrics(a):
+    root = Path(a.project)
+    dur = None
+    sbp = root / "storyboard.yaml"
+    sb = yaml.safe_load(sbp.read_text(encoding="utf-8")) if sbp.exists() else {}
+    if sb.get("audio") and (root / sb["audio"]).exists():
+        try:
+            dur = float(_run_out(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                  str(root / sb["audio"])]))
+        except ValueError:
+            pass
+    rec = SRC.lrclib(a.artist, a.title, a.album, dur)
+    if not rec:
+        die("no synced lyrics on LRCLIB - use `mv analyze --lyrics` + `mv align` instead")
+    lines = SRC.parse_lrc(rec["syncedLyrics"], dur)
+    print(f"[mv] LRCLIB: {rec.get('artistName')} - {rec.get('trackName')} ({rec.get('duration')}s), {len(lines)} lines")
+    if dur and rec.get("duration") and abs(rec["duration"] - dur) > 3:
+        print(f"[mv] WARN: LRCLIB track is {rec['duration']}s but your audio is {dur:.0f}s - another edit/version? "
+              "Check the timing in a proxy render, or shift with song_start.")
+    (root / "lyrics.txt").write_text("\n".join(l["text"] for l in lines) + "\n", encoding="utf-8")
+    (root / "lyrics.yaml").write_text("# from LRCLIB (line timing; word timing is spread evenly)\n" +
+                                      yaml.safe_dump({"lines": lines}, allow_unicode=True, sort_keys=False, width=200),
+                                      encoding="utf-8")
+    print(f"[mv] wrote lyrics.yaml + lyrics.txt  (storyboard: lyrics_file: lyrics.yaml). Lyrics are copyrighted - "
+          "use them for the user's own edit only.")
+
+
+def _run_out(cmd: list[str]) -> str:
+    return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+
+
 def cmd_fetch(a):
     p = Project(a.project)
     (p.root / "sources").mkdir(exist_ok=True)
     for sid, info in p.sources.items():
         info = info or {}
         if not info.get("url") or p.source_file(sid):
+            continue
+        if SRC.is_direct(info["url"], info.get("provider")):  # stock/CC file URL -> plain download
+            print(f"[mv] downloading {sid} <- {info.get('provider', 'url')}")
+            try:
+                got = SRC.direct_download(info["url"], p.root / "sources" / sid, a.max_mb)
+                print(f"     -> {got.name}")
+            except Exception as e:
+                print(f"[mv] WARN: failed to fetch {sid}: {e}")
             continue
         cmd = venv_tool("yt_dlp") + ["--no-warnings", "--no-playlist",
                "-f", f"bv*[height<={a.max_height}][vcodec^=avc1]/bv*[height<={a.max_height}]/b[height<={a.max_height}]/b",
@@ -1263,6 +1585,8 @@ def cmd_render(a):
     r = Renderer(p, a.mode, enc, jobs, a.force)
     out = r.run_all()
     print(f"[mv] done -> {out}")
+    if a.mode == "final":
+        print(f"[mv] credits -> {write_credits(p)}  (paste into the video description)")
 
 
 def main():
@@ -1286,6 +1610,23 @@ def main():
     s.set_defaults(fn=cmd_fonts)
     s = sub.add_parser("palette"); s.add_argument("image"); s.add_argument("-n", type=int, default=8)
     s.set_defaults(fn=cmd_palette)
+    s = sub.add_parser("find", help="licence-aware footage search with a numbered contact sheet")
+    s.add_argument("query"); s.add_argument("--project"); s.add_argument("--slot", help="name for this search (e.g. the source id)")
+    s.add_argument("--type", choices=["video", "image"], default="video")
+    s.add_argument("--providers", help=",".join(SRC.PROVIDERS)); s.add_argument("--orient", choices=["portrait", "landscape"])
+    s.add_argument("-n", type=int, default=8); s.set_defaults(fn=cmd_find)
+    s = sub.add_parser("pick"); s.add_argument("project"); s.add_argument("source"); s.add_argument("candidate", help="slot:n")
+    s.add_argument("--section", help="m:ss-m:ss (YouTube: download only this part)"); s.set_defaults(fn=cmd_pick)
+    s = sub.add_parser("ingest", help="register your own clips/photos and rank their best moments")
+    s.add_argument("project"); s.add_argument("folder"); s.add_argument("--prefix", default="own")
+    s.add_argument("--top", type=int, default=24); s.set_defaults(fn=cmd_ingest)
+    s = sub.add_parser("credits"); s.add_argument("project"); s.set_defaults(fn=cmd_credits)
+    s = sub.add_parser("lyrics", help="synced lyrics from LRCLIB")
+    s.add_argument("action", choices=["fetch"]); s.add_argument("project")
+    s.add_argument("--artist", required=True); s.add_argument("--title", required=True); s.add_argument("--album")
+    s.set_defaults(fn=cmd_lyrics)
+    s = sub.add_parser("presets"); s.set_defaults(fn=lambda a: [print(f"  {k:<18} {v.get('description', '')}")
+                                                                 for k, v in load_presets().items()])
     s = sub.add_parser("demo"); s.add_argument("name", nargs="?", default="story", choices=DEMOS + ["all"])
     s.add_argument("--dir", default="projects"); s.add_argument("--mode", choices=list(MODES), default="proxy")
     s.add_argument("--encoder", default="auto"); s.add_argument("--force", action="store_true")
@@ -1293,7 +1634,8 @@ def main():
     s = sub.add_parser("align"); s.add_argument("project"); s.add_argument("--start"); s.add_argument("--end")
     s.set_defaults(fn=cmd_align)
     s = sub.add_parser("search"); s.add_argument("query"); s.add_argument("-n", type=int, default=10); s.set_defaults(fn=cmd_search)
-    s = sub.add_parser("fetch"); s.add_argument("project"); s.add_argument("--max-height", type=int, default=1080); s.set_defaults(fn=cmd_fetch)
+    s = sub.add_parser("fetch"); s.add_argument("project"); s.add_argument("--max-height", type=int, default=1080)
+    s.add_argument("--max-mb", type=float, default=300, help="skip direct downloads larger than this (0 = no limit)"); s.set_defaults(fn=cmd_fetch)
     s = sub.add_parser("sheet"); s.add_argument("project"); s.add_argument("source")
     s.add_argument("--every", type=float, default=2.0); s.add_argument("--cols", type=int, default=6)
     s.add_argument("--rows", type=int, default=6); s.set_defaults(fn=cmd_sheet)

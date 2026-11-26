@@ -61,8 +61,10 @@ and Whisper word timestamps (`--model auto` picks from `machine.json`: `large-v3
 `--language` = the song's language code, default `vi`). Whisper on sung
 vocals is approximate: align the user's real lyrics to those timestamps, don't trust Whisper's text.
 If timing is poor, isolate vocals first (`demucs --two-stems vocals audio/song.mp3`) and pass `--audio` the vocal stem.
-Put the user's lyrics in `lyrics.txt` (one sung line per line, repeats written out), then `mv align projects/<slug>`
--> `lyrics.yaml` with per-word timing. Report the match % and spot-check a few lines against the audio.
+**Fastest lyric timing for released songs**: `mv lyrics fetch projects/<slug> --artist "<artist>" --title "<title>"`
+pulls synced line timing from LRCLIB (free) into `lyrics.yaml`; it warns when the track length differs from the audio.
+Otherwise put the user's lyrics in `lyrics.txt` (one sung line per line, repeats written out), then
+`mv align projects/<slug>` -> `lyrics.yaml` with per-word timing. Report the match % and spot-check a few lines.
 Setup installs a small default font pack; any other Google Font is fetched on demand by spec (`font: "Kanit:900i"`),
 including Japanese, Korean, Chinese, Thai, Arabic and Devanagari families - see `reference/fonts.md`.
 
@@ -85,6 +87,10 @@ ideas they would not have thought of - not just their own description played bac
    the drop into the first chorus, the most important lyric line).
 6. Respect the user's own ideas first; propose techniques that make them land harder, and add alternatives around them.
    House style: splits use soft seams (feather 0.2) unless hard contrast is the point.
+   **Style presets** (`mv presets`, `reference/presets.yaml`) give a coherent professional look in one line -
+   cinematic-ballad, tiktok-remix, kpop-stage, lofi-chill, rap-kinetic, wedding-romance, edm-neon, vintage-90s.
+   Propose the 1-2 that fit the song as the base (`preset: <name>`), then customise shots on top; shots with
+   `section: chorus/drop/verse/bridge` pick up the preset's section extras automatically.
 7. Each shot gets `technique: [IDs]` and, where a real choice exists, `alt: ["option 2: ..."]`.
 
 ### 4. Storyboard -> GATE 1
@@ -101,10 +107,21 @@ the ⭐ recommendation per section, the wow moments, and how to pick alternative
 **Stop and wait for approval / changes.**
 
 ### 5. Source footage -> GATE 2
-For each source: `mv search "<query>" -n 10`, pick candidates, put `url` (+ `section: "m:ss-m:ss"` to
-download only the needed part) and `rights` into the storyboard. Show the source list to the user
-(rights matter - see below) and wait for OK. Then `mv fetch projects/<slug>`.
-TikTok/Facebook/Instagram links work with yt-dlp too (search only works for YouTube - ask the user for links).
+Sources in order of preference (safest rights first):
+1. **The user's own footage/photos**: `mv ingest projects/<slug> <folder>` registers every clip/photo as `own1..ownN`
+   (in `picks.yaml`, files are referenced in place) and ranks scenes by sharpness, exposure, motion and faces →
+   `refs/ingest_best.jpg` + `candidates/ingest.json`. Open the sheet; use the best moments as `{src: own3, in: 12.4}`.
+2. **Licence-clear stock / CC**: `mv find "<english query>" --project projects/<slug> --slot <source_id>
+   [--type video|image] [--orient portrait]` searches Pexels + Pixabay (if `PEXELS_API_KEY` / `PIXABAY_API_KEY` are
+   set - free keys, suggest them in GATE 0), Wikimedia Commons and Openverse (no key). It writes a numbered
+   contact sheet `refs/cand_<slot>.jpg` - **open it and look**, then `mv pick projects/<slug> <source_id> <slot>:<n>`
+   (records url, creator, licence in `picks.yaml`; never rewrites storyboard.yaml).
+3. **YouTube / TikTok / Facebook links** only when the user asks for specific footage: `mv find ... --providers youtube`
+   or the user's links + `section: "m:ss-m:ss"`. Mark rights as unknown and warn about copyright.
+Search in English with concrete visual words ("rain on window at night, neon reflections"), several phrasings,
+`--orient portrait` for 9:16. Show the user the chosen list (thumbnails + licence) and **wait for OK before
+downloading**. Then `mv fetch projects/<slug>` (direct files capped at `--max-mb 300`; Commons videos use ≤1080p
+transcodes). `out/credits.txt` (written on final render or `mv credits`) lists attributions for the description.
 
 ### 6. Pick exact moments
 `mv sheet projects/<slug> <source_id> --every 2` makes `refs/sheet_<id>.jpg` with timecodes - **open the image and look**
@@ -126,6 +143,7 @@ Output: `projects/<slug>/out/<slug>_final_<aspect>.mp4`. For a 16:9 YouTube vers
 ## Rules
 - Times in storyboard = song time. `in:` = time in the ORIGINAL source video (even when only a `section` was downloaded).
 - Don't invent effects the renderer lacks; extend `scripts/mv.py` (fx_filters / slots_for) and document it in the schema.
+- Testing / demos use synthetic media (`mv demo`); never download real footage just to try a feature.
 - Rights: footage from other people's YouTube/TikTok and commercial songs are copyrighted. Platforms Content-ID
   match both; expect claims, muting, blocks, no monetization. Record `rights:` per source; prefer the artist's own
   material with permission, licensed/stock (Pexels, Pixabay, Mixkit), Creative Commons, or the user's own footage.

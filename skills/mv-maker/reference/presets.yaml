@@ -1,0 +1,68 @@
+# Style presets: `preset: <name>` in storyboard.yaml applies a coherent look in one line.
+# Explicit storyboard / shot values always win. Merge rules:
+#   defaults  -> top-level keys the storyboard did not set
+#   shot      -> every shot: `fx` is PREPENDED to the shot's fx; `transition` only if the shot has none
+#   sections  -> extra settings for shots whose `section` contains the key (chorus, drop, hook, verse, bridge, intro, outro)
+# A shot can opt out with `preset: false`.
+
+cinematic-ballad:
+  description: "Warm film, cinema bars, light leaks, soft dissolves, gentle lyrics - ballads, love songs, nostalgia"
+  defaults: {lyric_style: subtitle, lyric_anim: rise, caption_anim: rise, font: "Playfair Display:600i", accent: "#F2C14E",
+             typo: {shadow: 1.5}}
+  shot: {fx: ["grade:kodak", "letterbox:0.08", "grain:8", "leak:0.25"], transition: "dissolve:0.8"}
+  sections:
+    chorus: {fx: ["bloom:0.3"], lyric_style: karaoke}
+    bridge: {fx: ["grade:noir"], transition: "fadeblack:1.0"}
+
+tiktok-remix:
+  description: "Punchy colour, beat zoom + flash, glitch/whip cuts, big kinetic lyrics - remixes, dance, viral edits"
+  defaults: {lyric_style: stack, caption_anim: pop, display_font: "Anton", font: "Montserrat:800", accent: "#FF3D7F",
+             typo: {upper: true}}
+  shot: {fx: ["grade:teal-orange", "sharpen:0.6"], transition: "whip:0.2"}
+  sections:
+    chorus: {beat_fx: [zoom, flash], beat_every: 1, transition: "glitch:0.2"}
+    drop: {beat_fx: [zoom, flash, shake], beat_every: 1, transition: "flash"}
+    verse: {beat_fx: [zoom], beat_every: 2, lyric_style: word}
+
+kpop-stage:
+  description: "Bright pastel stage look, glow, lightstick flashes, karaoke lyrics - idol / fancam / concert edits"
+  defaults: {lyric_style: karaoke, caption_anim: pop, font: "Plus Jakarta Sans:800", accent: "#8EC5FF"}
+  shot: {fx: ["grade:pastel", "glow:0.35", "sharpen:0.5"], transition: "zoom:0.35"}
+  sections:
+    chorus: {beat_fx: [flash, zoom], beat_every: 1, fx: ["bloom:0.25"]}
+    bridge: {transition: "dissolve:0.6"}
+
+lofi-chill:
+  description: "Matte VHS, slow handheld drift, typewriter lyrics - lo-fi, chill, acoustic, late night"
+  defaults: {lyric_style: typewriter, font: "Caveat:700", caption_anim: fade, accent: "#E7B98A", fade_out: 2.0}
+  shot: {fx: ["grade:matte", "vhs", "handheld:0.6", "vignette"], transition: "dissolve:1.0"}
+
+rap-kinetic:
+  description: "High-contrast bleach/noir, shake on hits, glitch cuts, stacked uppercase words - rap, hip-hop, trap"
+  defaults: {lyric_style: stack, display_font: "Anton", font: "Barlow Condensed:800", accent: "#FFD400",
+             typo: {upper: true}}
+  shot: {fx: ["grade:bleach", "sharpen:0.9", "grain:10"], transition: "glitch:0.18"}
+  sections:
+    chorus: {beat_fx: [shake, flash], beat_every: 1, fx: ["chroma:4"]}
+    verse: {lyric_style: word, beat_fx: [zoom], beat_every: 2}
+
+wedding-romance:
+  description: "Golden hour, bloom, light leaks, slow dissolves, calligraphy titles - weddings, love stories, anniversaries"
+  defaults: {lyric_style: subtitle, lyric_anim: rise, font: "Cormorant Garamond:600", display_font: "Great Vibes",
+             accent: "#F6D7A7", fade_out: 2.5}
+  shot: {fx: ["grade:golden", "bloom:0.3", "leak:0.3"], transition: "dissolve:1.0"}
+  sections:
+    chorus: {lyric_style: karaoke}
+
+edm-neon:
+  description: "Cyberpunk colour, neon lyrics, chroma split, beat flashes - EDM, synthwave, club"
+  defaults: {lyric_style: neon, font: "Exo 2:800i", accent: "#00E5FF", caption_anim: pop}
+  shot: {fx: ["grade:cyberpunk", "chroma:3", "glow:0.3"], transition: "zoom:0.3"}
+  sections:
+    drop: {beat_fx: [zoom, flash, shake], beat_every: 1, transition: "glitch:0.2"}
+    chorus: {beat_fx: [flash], beat_every: 1}
+
+vintage-90s:
+  description: "VHS home-video look, warm kodak grade, 4:3-style bars, word-by-word lyrics - throwback, nostalgia"
+  defaults: {lyric_style: word, font: "VT323", accent: "#FFB347"}
+  shot: {fx: ["grade:kodak", "vhs", "grain:14", "vignette"], transition: "fadeblack:0.5"}
