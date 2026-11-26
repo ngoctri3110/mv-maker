@@ -12,6 +12,11 @@
 - `mv stills`: detail crops worth pushing into (faces, texture, contrast) + ready `camera:` layers per image.
 - 2.5D parallax on stills: `parallax: true` (Depth Anything V2 small via transformers, cached matte).
 
+### Fixed
+
+- Camera `detail` moves anchor the crop on the target, so details near the edge of a square poster are reachable in
+  9:16, and they start part-way in, so short shots already read as that detail.
+
 ## [0.11.0] - 2026-11-26
 
 ### Added

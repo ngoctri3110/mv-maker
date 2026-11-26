@@ -632,10 +632,22 @@ def camera_path(ly: dict):
             die(f"camera '{cam}' - one of {sorted(CAMERA_MOVES)} or {{detail: [x, y, zoom]}} / {{from: .., to: ..}}")
         a, b = CAMERA_MOVES[cam]
         return list(a), list(b), True
-    if "detail" in cam:
-        x, y, z = (list(cam["detail"]) + [2.0])[:3]
-        return [0.5, 0.5, 1.0], [float(x), float(y), float(z)], cam.get("ease", True)
+    if "detail" in cam:  # start half-way towards the detail: short shots must already read as that detail
+        x, y, z = (float(v) for v in (list(cam["detail"]) + [2.0])[:3])
+        return [0.5 + (x - 0.5) * 0.6, 0.5 + (y - 0.5) * 0.6, 1 + (z - 1) * 0.45], [x, y, z], cam.get("ease", True)
     return [float(v) for v in cam["from"]], [float(v) for v in cam["to"]], cam.get("ease", True)
+
+
+def camera_focus(ly: dict):
+    """Crop anchor for a camera move: with anchor = the target point, that point keeps the same relative position in
+    the cropped frame, so `detail: [0.9, 0.7]` on a square poster in 9:16 really ends on the right-hand detail."""
+    cam = camera_path(ly)
+    if not cam or ly.get("camera") is None:
+        return None
+    (x0, y0, _), (x1, y1, _), _ = cam
+    if isinstance(ly["camera"], dict) and "detail" in ly["camera"]:
+        return [x1, y1]
+    return [round((x0 + x1) / 2, 3), round((y0 + y1) / 2, 3)]
 
 
 def camera_zoompan(cam, w: int, h: int, frames: int, fps: int, zscale: float = 1.0) -> str:
@@ -822,6 +834,8 @@ class Renderer:
                             f"fontsize={fs}:line_spacing={fs // 3}:x=(w-text_w)/2:y=(h-text_h)/2:"
                             f"box=1:boxcolor=black@0.45:boxborderw={fs // 2}")
         focus = ly.get("focus")
+        if focus is None and not contain:
+            focus = camera_focus(ly)  # anchor the crop on the camera's target so edge details stay reachable
         if focus in ("auto", "track") and span and not span[3] and not contain:
             fit = self._tracked_cover(f, span, ly, w, h, need, speed)
         else:
@@ -873,7 +887,7 @@ class Renderer:
                                                                          if not isinstance(ly.get("parallax"), bool) else 0.12)], True)
         frames = max(1, int(need * self.fps))
         k = float(ly.get("parallax_depth", 2.2))
-        fit = cover(2 * w, 2 * h, ly.get("focus") if isinstance(ly.get("focus"), list) else None)
+        fit = cover(2 * w, 2 * h, ly.get("focus") if isinstance(ly.get("focus"), list) else camera_focus(ly))
         args = ["-loop", "1", "-framerate", str(self.fps), "-t", f"{need:.3f}", "-i", str(f),
                 "-loop", "1", "-framerate", str(self.fps), "-t", f"{need:.3f}", "-i", str(mask)]
         pre = [f"[IN0]fps={self.fps},{fit},split[{lab}pa][{lab}pb]",

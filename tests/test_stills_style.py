@@ -53,6 +53,14 @@ class CameraTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             mv.camera_path({"camera": "orbit"})
 
+    def test_detail_anchors_the_crop_on_the_target_and_starts_near_it(self):
+        ly = {"camera": {"detail": [0.9, 0.7, 2.4]}}
+        self.assertEqual(mv.camera_focus(ly), [0.9, 0.7])                    # edge details stay reachable in 9:16
+        start = mv.camera_path(ly)[0]
+        self.assertGreater(start[0], 0.7)                                    # a short shot already reads as the detail
+        self.assertEqual(mv.camera_focus({"camera": {"from": [0.2, 0.5, 1.5], "to": [0.4, 0.5, 1.5]}}), [0.3, 0.5])
+        self.assertIsNone(mv.camera_focus({"zoom": "in"}))
+
     def test_zoompan_keeps_the_window_inside_and_eases(self):
         z = mv.camera_zoompan(([0.5, 0.5, 1.0], [0.9, 0.1, 2.0], True), 540, 960, 72, 24)
         self.assertIn("max(0,min(iw-iw/zoom,", z)
