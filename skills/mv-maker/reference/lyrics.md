@@ -68,7 +68,10 @@ Manual lyric videos:
 - One accent colour taken from the cover/poster.
 
 ### Poster + a few photos (no footage)
-Make it move: `mv stills <p>` lists the best details of each image; give shots `camera:` moves (push / pans /
+A release poster is one message (title, artist, date): keep it whole - `layout: fit_blur` + a slow shot `camera:`
+push, type on the beat (`title_card` center, `end_card` with `y: 0.8` under the poster), small photos as cards
+(`layout: pip`), warm transitions (`strobe`, `dissolve`, `burn`). Crop into details only when the image is large
+enough (`mv review` flags enlargement) and the detail still tells the story. Make it move: `mv stills <p>` lists the best details of each image; give shots `camera:` moves (push / pans /
 `{detail: [x, y, zoom]}`) and `parallax: true` on key shots, cut them on the beat, mix with a lyric-video template's
 generated scenes for variety, take colours from the poster (`mv palette`) and its lettering (`fonts.md`).
 

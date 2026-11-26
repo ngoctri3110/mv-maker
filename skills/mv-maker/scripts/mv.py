@@ -1108,7 +1108,11 @@ class Renderer:
             graph.append(f"[{cur}][{lab}]blend=all_mode={mode}:all_opacity={op}[ov{k}]")
             cur = f"ov{k}"
 
-        post = fx_filters(sh.get("fx"), f"{sid}s", W, H, fps)
+        post = []
+        scam = camera_path({"camera": sh["camera"]}) if sh.get("camera") else None
+        if scam:  # shot-level camera: moves the whole composition (e.g. a full poster on its blurred background)
+            post += [f"scale={2 * W}:{2 * H}", camera_zoompan(scam, W, H, max(1, int(need * fps)), fps)]
+        post += fx_filters(sh.get("fx"), f"{sid}s", W, H, fps)
         post += self.beat_filters(sh, s, e, need)
         pk, _, pd = parse_transition(self.p.shots[i - 1].get("transition", "cut")) if i > 0 else ("cut", "", 0)
         glitch = ("rgbashift=rh=-22:bh=22:gv=6:enable='{w}',noise=alls=45:allf=t:enable='{w}',"

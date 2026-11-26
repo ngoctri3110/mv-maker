@@ -18,7 +18,7 @@ shots below; edit single shots afterwards.
 | `loudness` | | integrated LUFS target (e.g. `-14`) - only for a mix far too quiet / loud; finished masters are left alone |
 | `genre` | | cutting grammar for the edit check: `ballad` `pop` `kpop` `rap` `edm` `rock` `indie` `rnb` (`mv genres`, genres.md) |
 | `cut_lead` | 0 | cut picture this much BEFORE each shot boundary: `1f`, `2f` (frames) or seconds (≤ 0.2). Audio/lyrics unchanged |
-| `title_card` | | official-MV title: `{artist, title, sub, start, dur, style: official|center|minimal}` (official = lower-left, letter-spaced artist, "Title") |
+| `title_card` | | official-MV title: `{artist, title, sub, start, dur, style: official|center|minimal}` (official = lower-left, letter-spaced artist, "Title"); `center` also takes `y` (0..1, e.g. 0.8 under a poster) and `scale` |
 | `end_card` | | closing card: `{text, sub, dur, start, style}` (default centred, last `dur` seconds) |
 | `visualizer` | | audio spectrum on any video: `{type: bars|wave, color, opacity, area: [x0, y0, x1, y1]}` (poster videos use `poster.visualizer`) |
 | `lang` | en | language of the `storyboard.md` labels (`en`, `vi`; others fall back to `en`) - set to the user's language |
@@ -67,6 +67,7 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 | `avoid` | what must not be in the picture (`"text, logo"`) - lowers matching scores |
 | `size` | `ews` `wide` `full` `medium` `mcu` `close` `ecu` `insert` `aerial` `pov` - edit check flags jump cuts / no size variety |
 | `velocity` | velocity edit: `true` or `{slow: 0.35, fast: 2.2, every: 1}` - slow motion on each beat, fast between (needs `mv analyze`) |
+| `camera` | shot-level virtual camera on the whole composition (same moves as the layer `camera`) - e.g. a slow push on a full poster with `layout: fit_blur` |
 | `behind` | `true` = text / lyrics pass BEHIND the person in this shot (MediaPipe matte; `mv doctor --install segment`) |
 | `layout` | `full` · `split_v` (top/bottom) · `split_h` (left/right) · `split_3v` (3 rows) · `pip` · `fit_blur` (whole source frame centred on its own blurred copy) · `poster` (cover card + blurred cover bg + player UI + lyric panel) |
 | `lyric_style` | per-shot override of the lyric style for lines starting inside this shot |

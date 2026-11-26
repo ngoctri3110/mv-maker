@@ -492,13 +492,15 @@ class AssWriter:
         if kind == "end":
             title, artist, sub = str(card.get("text", title)), str(card.get("sub", "")), ""
         fade = "\\fad(500,600)"
-        if style == "center":
-            cx, cy = W // 2, H // 2
+        if style == "center":  # `y` (0..1) moves it, e.g. under a poster; `scale` enlarges the title
+            cx, cy = W // 2, int(H * float(card.get("y", 0.5)))
+            k = float(card.get("scale", 1.0))
             if artist:
                 grow = f"\\t(0,{int((end - start) * 1000)},\\fsp{round(self.base * 0.012, 1)})"
                 self.add(start, end, "tc_artist",
-                         f"{{\\an2\\pos({cx},{cy - int(self.base * 0.05)}){fade}{grow}}}{_esc(artist.upper())}")
-            self.add(start, end, "tc_title", f"{{\\an8\\pos({cx},{cy - int(self.base * 0.03)}){fade}\\fs{int(self.base * 0.11)}}}{_esc(title)}")
+                         f"{{\\an2\\pos({cx},{cy - int(self.base * 0.05 * k)}){fade}{grow}}}{_esc(artist.upper())}")
+            self.add(start, end, "tc_title",
+                     f"{{\\an8\\pos({cx},{cy - int(self.base * 0.03 * k)}){fade}\\fs{int(self.base * 0.11 * k)}}}{_esc(title)}")
             return
         if style == "minimal":
             x, y = int(W * 0.06), int(H * 0.06)

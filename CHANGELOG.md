@@ -12,6 +12,9 @@
 - `mv stills`: detail crops worth pushing into (faces, texture, contrast) + ready `camera:` layers per image.
 - 2.5D parallax on stills: `parallax: true` (Depth Anything V2 small via transformers, cached matte).
 
+- Shot-level `camera:` moves the whole composition (a full poster on its blurred background); `title_card` /
+  `end_card` center style take `y` and `scale`.
+
 ### Fixed
 
 - Camera `detail` moves anchor the crop on the target, so details near the edge of a square poster are reachable in
