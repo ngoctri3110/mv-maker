@@ -88,6 +88,9 @@ often - [`reference/platforms.md`](skills/mv-maker/reference/platforms.md).
 - **Rhythm**: cuts on beats, beat-synced zoom pulse / flash / shake, **speed ramps**, **velocity edits** (slow motion on
   every beat), **freeze frames**, optical-flow slow motion, 35+ transitions (dissolve, flash, glitch, whip, zoom-through,
   zoom-blur, spin, film burn, strobe, dip to black, circle open, wipes…), lyrics that pulse or glow on the beat.
+- **From a poster and a few photos**: `mv analyze` reads the song's style (genre candidates, mood, key, tempo; an
+  optional AudioSet model for a learned reading), `mv stills` finds the details worth pushing into, and a virtual
+  camera (push, pull, pans, detail moves) plus optional **2.5D parallax** turns each still into several shots.
 - **One film from mixed footage**: automatic colour matching across cameras and sources, any `.cube` LUT, a crop that
   **follows the subject** when 16:9 footage goes vertical, stabilisation, denoise, local contrast, optional AI upscale,
   and a footage-quality check that flags sources enlarged too much. Film finishing: halation, anamorphic flare, film
@@ -255,6 +258,7 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 | `mv sheet projects/x <id>` / `mv scenes projects/x <id>` | contact sheet with timecodes / scene cuts |
 | `mv render projects/x --mode proxy\|final [--encoder h264_nvenc]` | render |
 | `mv platforms [--for tiktok,youtube]` · `mv render projects/x --format 16:9` · `--cut 0:45-1:30` | platform plan · another aspect version · a short cut (snapped to bars, audio fades) |
+| `mv stills projects/x` | shot ideas from images: detail crops + `camera:` moves |
 | `mv deliver projects/x` | every platform version + short cut + SRT captions + thumbnails + description + QA → `out/deliver.md` |
 | `mv qa projects/x` · `mv thumbnail projects/x [--at m:ss]` · `mv srt projects/x` | check renders (black/frozen frames, sync, loudness) · thumbnail / cover · captions |
 | `mv fonts list\|get\|check\|preview` · `mv palette <img>` | font catalogue, download, coverage, specimen over the poster · artwork colours |

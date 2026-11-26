@@ -67,6 +67,11 @@ Manual lyric videos:
 - Keep backgrounds low-contrast: `fx: [blur:10, bright:-0.25]`, or `fit_blur`.
 - One accent colour taken from the cover/poster.
 
+### Poster + a few photos (no footage)
+Make it move: `mv stills <p>` lists the best details of each image; give shots `camera:` moves (push / pans /
+`{detail: [x, y, zoom]}`) and `parallax: true` on key shots, cut them on the beat, mix with a lyric-video template's
+generated scenes for variety, take colours from the poster (`mv palette`) and its lettering (`fonts.md`).
+
 ### C. Poster player (cover + lyric panel) - one poster image → lyric video
 `layout: poster` turns one image (or video) into a music-player style video:
 blurred cover fills the background, sharp cover card with shadow, title + artist, audio visualizer,

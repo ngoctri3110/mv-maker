@@ -82,6 +82,9 @@ tiêu đề tự đặt vào trong), **hook** (hình mạnh nhất trong 1-3 gi�
   wedding-romance, edm-neon, vintage-90s, rock-grunge, rnb-night, pop-bright).
 - **Nhịp**: cắt theo beat, zoom nảy / nháy sáng / rung theo beat, slow-motion, **velocity edit** (chậm đúng beat, nhanh giữa
   các beat), 35+ kiểu chuyển cảnh (thêm zoom-blur, xoay, film burn, strobe), lyric nảy / sáng theo beat.
+- **Từ poster và vài tấm ảnh**: `mv analyze` đọc phong cách bài hát (thể loại khả dĩ, cảm xúc, giọng, tempo; có thể
+  bật model AudioSet để nhận diện bằng máy học), `mv stills` tìm các chi tiết đáng zoom vào, máy quay ảo (đẩy vào, kéo ra,
+  lia, zoom chi tiết) và **parallax 2.5D** (tùy chọn) biến mỗi ảnh tĩnh thành nhiều shot sống động.
 - **Footage nhiều nguồn thành một bộ phim**: tự khớp màu giữa các máy quay/nguồn, dùng file LUT `.cube`, khung dọc **tự
   bám theo nhân vật** khi cắt từ video ngang, chống rung, khử nhiễu, tăng tương phản cục bộ, upscale AI (tùy chọn), cảnh báo
   nguồn bị phóng to quá mức. Hoàn thiện kiểu phim nhựa: halation, flare anamorphic, hạt phim, bụi, rung khung, méo ống kính.

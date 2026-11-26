@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0] - 2026-11-26
+
+### Added
+
+- Style hints in `mv analyze`: key and mode, tempo, drum weight, brightness, density, dynamics -> genre candidates,
+  energy and mood (flags close calls such as K-pop vs EDM); `--genre-model` adds an AudioSet (AST) reading of genre
+  and mood. `mv context` shows them.
+- Virtual camera on stills and clips: layer `camera:` (push, pull, pans, drift, `{detail: [x, y, zoom]}`,
+  `{from, to}`), eased; the old `zoom: in|out` maps to it.
+- `mv stills`: detail crops worth pushing into (faces, texture, contrast) + ready `camera:` layers per image.
+- 2.5D parallax on stills: `parallax: true` (Depth Anything V2 small via transformers, cached matte).
+
 ## [0.11.0] - 2026-11-26
 
 ### Added

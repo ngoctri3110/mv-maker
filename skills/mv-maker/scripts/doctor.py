@@ -235,7 +235,9 @@ def build(run_bench: bool = True) -> dict:
         size = "~3 GB (PyTorch CUDA) + model 1.5-4.5 GB" if has_nvidia else "~0.8 GB (PyTorch CPU) + model ~1.5 GB"
         rec("match", "recommended", "Semantic footage matching (SigLIP 2, free, local): rank online candidates and find the "
             "matching moment inside YouTube videos before downloading (mv scout / find --rank --deep), and pick scenes "
-            f"from your own clips by description (mv match). {size}; the model downloads on first use.",
+            f"from your own clips by description (mv match). The same install runs the optional genre model "
+            f"(mv analyze --genre-model, ~350 MB) and 2.5D parallax (depth model, ~100 MB). {size}; models download "
+            f"on first use.",
             auto="pip install torch transformers pillow sentencepiece protobuf")
     missing_keys = [k for k in ("PEXELS_API_KEY", "PIXABAY_API_KEY") if not os.environ.get(k)]
     if missing_keys:

@@ -111,6 +111,8 @@ Finishing: `letterbox[:0.1]` cinema bars · `leak[:0.4]` drifting warm light lea
 ## 6. Storytelling devices (concept level)
 | ID | Device | Description |
 |---|---|---|
+| S-STILLS | One image, many shots | A poster / few photos: push, pan and detail moves turn each image into several shots; cut them on the beat like footage | layer `camera:`, `mv stills` |
+| S-PARALLAX | 2.5D parallax | Depth on a still - the subject comes towards the viewer; key lines, title shots | layer `parallax: true` |
 | S-REFRAME | Subject-tracking reframe | 16:9 footage in a 9:16 video without losing the subject | layer `focus: auto` |
 | S-INTERCUT | Performance / story intercut | Verses on the story, choruses on the performance, bridge breaks the pattern; `role:` per shot (genres.md) |
 | S-COVERAGE | Size progression | Wide → medium → close as emotion rises; change `size:` on every cut from the same source (no jump cuts) |

@@ -309,3 +309,64 @@ def _segmenter():
                            "(mv doctor --install segment)")
     model = sol.SelfieSegmentation(model_selection=1)
     return lambda rgb: model.process(rgb).segmentation_mask
+
+
+# ----------------------------------------------------------------------------------------------- stills: details + depth
+def detail_points(img: Path, n: int = 5) -> list[tuple[float, float, float, str]]:
+    """Interesting places to push into on a still: faces first, then the busiest / most contrasted grid cells
+    (texture, text, eyes, objects), spread out. -> [(x, y, zoom, reason)] in 0..1."""
+    import cv2
+    import numpy as np
+    im = cv2.imread(str(img))
+    if im is None:
+        return [(0.5, 0.5, 1.6, "centre")]
+    h0, w0 = im.shape[:2]
+    sc = 480 / max(h0, w0)
+    sm = cv2.resize(im, (max(2, int(w0 * sc)), max(2, int(h0 * sc))))
+    g = cv2.cvtColor(sm, cv2.COLOR_BGR2GRAY)
+    H, W = g.shape
+    out = []
+    if hasattr(cv2, "CascadeClassifier") and hasattr(cv2, "data"):
+        c = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        if not c.empty():
+            for (x, y, fw, fh) in sorted(c.detectMultiScale(g, 1.1, 5, minSize=(20, 20)), key=lambda r: -r[2] * r[3])[:2]:
+                out.append(((x + fw / 2) / W, (y + fh / 2) / H, round(min(3.0, max(1.6, 0.35 * W / fw)), 1), "face"))
+    lap = np.abs(cv2.Laplacian(g, cv2.CV_64F))
+    lab = cv2.cvtColor(sm, cv2.COLOR_BGR2LAB).astype(np.float64)
+    sal = lap / (lap.mean() + 1e-6) + np.linalg.norm(lab - lab.reshape(-1, 3).mean(0), axis=2) / 40
+    gx, gy = 6, 8 if H > W else 6
+    cells = []
+    for i in range(gx):
+        for j in range(gy):
+            a = sal[j * H // gy:(j + 1) * H // gy, i * W // gx:(i + 1) * W // gx]
+            edge = i in (0, gx - 1) or j in (0, gy - 1)  # frame borders / lettering edges are rarely the subject
+            cells.append((float(a.mean()) * (0.6 if edge else 1.0), (i + 0.5) / gx, (j + 0.5) / gy))
+    for score, x, y in sorted(cells, reverse=True):
+        if len(out) >= n:
+            break
+        if all(abs(x - ox) > 0.22 or abs(y - oy) > 0.22 for ox, oy, _, _ in out):
+            out.append((round(x, 2), round(y, 2), 2.0, "detail"))
+    return [(round(x, 2), round(y, 2), z, why) for x, y, z, why in out[:n]] or [(0.5, 0.5, 1.6, "centre")]
+
+
+DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
+
+
+def depth_mask(img: Path, dst: Path, fg_share: float = 0.35) -> Path:
+    """Foreground matte (white = near) from a monocular depth model, feathered; cached. For `parallax: true`."""
+    if dst.exists() and dst.stat().st_mtime >= img.stat().st_mtime:
+        return dst
+    try:
+        from transformers import pipeline
+        from PIL import Image, ImageFilter
+        import numpy as np
+    except ImportError as e:
+        raise RuntimeError("parallax needs PyTorch + transformers: mv doctor --install match "
+                           "(the depth model, ~100 MB, downloads on first use)") from e
+    im = Image.open(img).convert("RGB")
+    depth = np.asarray(pipeline("depth-estimation", model=DEPTH_MODEL)(im)["depth"], dtype=np.float32)  # bright = near
+    thr = float(np.percentile(depth, 100 * (1 - fg_share)))
+    m = Image.fromarray(((depth >= thr) * 255).astype(np.uint8)).resize(im.size)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    m.filter(ImageFilter.GaussianBlur(radius=max(2, im.size[0] // 250))).save(dst)
+    return dst

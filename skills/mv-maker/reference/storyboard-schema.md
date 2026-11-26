@@ -94,6 +94,8 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 | `upscale` | `true` = AI upscale (Real-ESRGAN) of the part used, for soft / low-res sources (`mv doctor --install upscale`) |
 | `match` | `false` = keep this layer out of `color_match` |
 | `zoom` | `in` / `out` Ken Burns; `zoom_amount` (0.12) |
+| `camera` | virtual camera on a still or clip: `push` `pull` `pan-left` `pan-right` `pan-up` `pan-down` `drift`, `{detail: [x, y, zoom]}` (wide -> into a detail; `mv stills` suggests them), `{from: [x, y, zoom], to: [x, y, zoom], ease: true}` |
+| `parallax` | stills: `true` or a zoom amount (0.12) - 2.5D push-in, the foreground (depth model) moves ~2x faster than the background; `parallax_fg` share of the image treated as foreground (0.35), `parallax_depth` (2.2) |
 | `fx` | per-layer effects |
 | `ramp` | speed ramp keyframes `[[shot_time, speed], ...]`, linearly interpolated (replaces `speed`); `beat` = velocity edit from the beats |
 | `freeze` | `[at, hold]` - hold the frame at shot second `at` for `hold` seconds |

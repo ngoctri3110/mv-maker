@@ -43,6 +43,10 @@ or a short cut. **Platforms first, before any footage** (`mv platforms --for <li
 aspect ratio + a short cut where a platform caps length), master `format:`, which source footage fits, safe zones, hook
 - set `platforms:` / `format:`. **Video type**: A footage MV · B lyric video · C poster player (only a cover → C).
 For A settle the **genre** (`genres.md`) and what footage exists (performance shot to playback, story, b-roll).
+`mv analyze` prints **style hints** (genre candidates, mood, key, tempo; `--genre-model` adds a learned reading) - use
+them with the lyrics, the artwork and what the user says; on a "close call" ask. Only a poster / a few photos:
+`mv stills <p>` suggests detail crops and `camera:` moves so each image yields several shots (`parallax: true` for
+2.5D depth), plus generated backgrounds, lyric typography and stock from `mv scout` to avoid a static MV.
 For B without footage: `mv auto <p> --template lv-<look>` (`lyrics.md`).
 
 **2. Analyze + time lyrics.** `mv analyze <p> --lyrics` (beats, sections, Whisper words; `--language` = song language).

@@ -18,6 +18,7 @@ Subcommands:
                                      planning digest: only the genre / presets / techniques / fields this project needs
   review   <project>                 storyboard.yaml -> storyboard.md (for human approval, incl. edit check)
   proof    <project> [--only S03,S07] one labelled frame per shot in a single sheet (refs/proof.jpg) - check the edit
+  stills   <project>                 shot ideas from images: detail crops + `camera:` moves (one poster -> many shots)
   qa       <project> [--mode final]  check rendered files: black / frozen frames, A/V sync, loudness, specs -> out/qa.md
   thumbnail <project> [--format f] [--at m:ss]  best frame + title -> out/thumb_<aspect>.jpg (YouTube / cover)
   srt      <project> [--cut a-b]     lyrics as SubRip captions -> out/<slug>.srt
@@ -607,6 +608,49 @@ def ramp_expr(segs) -> str:
     return e
 
 
+CAMERA_MOVES = {  # (from, to) as [centre x, centre y, zoom] - zoom 1 = the cover-fitted frame
+    "push": ([0.5, 0.5, 1.0], [0.5, 0.5, 1.22]), "pull": ([0.5, 0.5, 1.22], [0.5, 0.5, 1.0]),
+    "pan-left": ([0.64, 0.5, 1.3], [0.36, 0.5, 1.3]), "pan-right": ([0.36, 0.5, 1.3], [0.64, 0.5, 1.3]),
+    "pan-up": ([0.5, 0.64, 1.3], [0.5, 0.36, 1.3]), "pan-down": ([0.5, 0.36, 1.3], [0.5, 0.64, 1.3]),
+    "drift": ([0.47, 0.52, 1.08], [0.53, 0.48, 1.14]),
+}
+
+
+def camera_path(ly: dict):
+    """Virtual camera on a still (or video): `camera: push|pull|pan-left|pan-right|pan-up|pan-down|drift`,
+    `camera: {detail: [x, y, zoom]}` (wide -> into a detail), `camera: {from: [x, y, z], to: [x, y, z]}`.
+    The old `zoom: in|out` maps to push / pull. Returns (from, to, ease) or None."""
+    cam = ly.get("camera")
+    if cam is None and ly.get("zoom") in ("in", "out"):
+        amt = float(ly.get("zoom_amount", 0.12))
+        a, b = [0.5, 0.5, 1.0], [0.5, 0.5, 1.0 + amt]
+        return (a, b, False) if ly["zoom"] == "in" else (b, a, False)
+    if not cam:
+        return None
+    if isinstance(cam, str):
+        if cam not in CAMERA_MOVES:
+            die(f"camera '{cam}' - one of {sorted(CAMERA_MOVES)} or {{detail: [x, y, zoom]}} / {{from: .., to: ..}}")
+        a, b = CAMERA_MOVES[cam]
+        return list(a), list(b), True
+    if "detail" in cam:
+        x, y, z = (list(cam["detail"]) + [2.0])[:3]
+        return [0.5, 0.5, 1.0], [float(x), float(y), float(z)], cam.get("ease", True)
+    return [float(v) for v in cam["from"]], [float(v) for v in cam["to"]], cam.get("ease", True)
+
+
+def camera_zoompan(cam, w: int, h: int, frames: int, fps: int, zscale: float = 1.0) -> str:
+    """zoompan along the camera path (input must be the cover-fitted frame at 2x); `zscale` exaggerates the zoom
+    change (parallax foreground)."""
+    (x0, y0, z0), (x1, y1, z1), ease = cam
+    z1 = z0 + (z1 - z0) * zscale
+    p = f"min(on/{max(1, frames - 1)},1)"
+    e = f"({p}*{p}*(3-2*{p}))" if ease else p
+    z = f"{z0}+({z1 - z0:.4f})*{e}"
+    cx, cy = f"({x0}+({x1 - x0:.4f})*{e})", f"({y0}+({y1 - y0:.4f})*{e})"
+    return (f"zoompan=z='{z}':x='max(0,min(iw-iw/zoom,iw*{cx}-iw/zoom/2))':"
+            f"y='max(0,min(ih-ih/zoom,ih*{cy}-ih/zoom/2))':d=1:s={w}x{h}:fps={fps}")
+
+
 def cover(w: int, h: int, focus) -> str:
     fx, fy = (focus or [0.5, 0.5])[:2]
     return (f"scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,"
@@ -738,6 +782,9 @@ class Renderer:
                                       self.p.sb.get("palette"), self.p.sb.get("accent"))
             except (ValueError, RuntimeError) as e:
                 die(f"{shot_id}: source {sid}: {e}")
+        elif f is not None and f.suffix.lower() in IMAGE_EXT and ly.get("parallax") and not contain:
+            args, pre = self._parallax(f, ly, w, h, need, lab, shot_id)
+            spec = "parallax"  # prebuilt like a generated source: the chain below only finishes it
         elif f is not None and f.suffix.lower() in IMAGE_EXT:
             args = ["-loop", "1", "-framerate", str(self.fps), "-t", f"{need:.3f}", "-i", str(f)]
         elif f is not None:
@@ -794,13 +841,9 @@ class Renderer:
             at, hold = float(fr[0]), float(fr[1])
             chain += [f"loop=loop={max(1, int(hold * self.fps))}:size=1:start={int(at * self.fps)}",
                       f"setpts=N/{self.fps}/TB"]
-        z = None if contain else ly.get("zoom")
-        if z:
-            amt = float(ly.get("zoom_amount", 0.12))
-            frames = max(1, int(need * self.fps))
-            zexpr = f"1+{amt}*on/{frames}" if z == "in" else f"{1 + amt}-{amt}*on/{frames}"
-            chain += [f"scale={2 * w}:{2 * h}",
-                      f"zoompan=z='{zexpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={w}x{h}:fps={self.fps}"]
+        cam = None if (contain or spec) else camera_path(ly)
+        if cam:
+            chain += [f"scale={2 * w}:{2 * h}", camera_zoompan(cam, w, h, max(1, int(need * self.fps)), self.fps)]
         chain += fx_filters(fx_list, lab, w, h, self.fps)
         if f is None and not spec:
             chain.append(label_filter)  # after zoom/fx so the card text stays readable
@@ -816,6 +859,31 @@ class Renderer:
         beats = self.p.beats_in(s, e, int(v.get("every", sh.get("beat_every", 1))))
         keys = velocity_keys(beats, need, float(v.get("slow", 0.35)), float(v.get("fast", 2.2)))
         return {**ly, "ramp": keys, "_ramp_segs": 120}
+
+    def _parallax(self, f: Path, ly: dict, w: int, h: int, need: float, lab: str, shot_id: str):
+        """2.5D: a depth model separates the foreground; it zooms ~2x faster than the background (push-in only, so
+        the foreground always covers its own original position - no holes)."""
+        mask = self.p.build / "depth" / f"{FG.key(FG.file_key(f))}.png"
+        try:
+            with self._lock:
+                FG.depth_mask(f, mask, float(ly.get("parallax_fg", 0.35)))
+        except RuntimeError as e:
+            die(f"{shot_id}: {e}")
+        cam = camera_path(ly) or ([0.5, 0.5, 1.0], [0.5, 0.5, 1.0 + float(ly.get("parallax", 0.12)
+                                                                         if not isinstance(ly.get("parallax"), bool) else 0.12)], True)
+        frames = max(1, int(need * self.fps))
+        k = float(ly.get("parallax_depth", 2.2))
+        fit = cover(2 * w, 2 * h, ly.get("focus") if isinstance(ly.get("focus"), list) else None)
+        args = ["-loop", "1", "-framerate", str(self.fps), "-t", f"{need:.3f}", "-i", str(f),
+                "-loop", "1", "-framerate", str(self.fps), "-t", f"{need:.3f}", "-i", str(mask)]
+        pre = [f"[IN0]fps={self.fps},{fit},split[{lab}pa][{lab}pb]",
+               f"[{lab}pa]{camera_zoompan(cam, w, h, frames, self.fps)}[{lab}pbg]",
+               f"[{lab}pb]{camera_zoompan(cam, w, h, frames, self.fps, k)}[{lab}pfg0]",
+               f"[IN1]format=gray,fps={self.fps},{fit},format=yuv420p,{camera_zoompan(cam, w, h, frames, self.fps, k)},"
+               f"format=gray[{lab}pm]",
+               f"[{lab}pfg0][{lab}pm]alphamerge[{lab}pfg]",
+               f"[{lab}pbg][{lab}pfg]overlay=format=auto:shortest=1,format=yuv420p[{lab}g]"]
+        return args, pre
 
     def _resolve_fx(self, x):
         """`lut:<file.cube>[@0.7]` -> a raw lut3d filter with the LUT copied next to the graph."""
@@ -1379,10 +1447,24 @@ def cmd_analyze(a):
            "beats": [round(float(b), 3) for b in beats],
            "downbeats_guess": [round(float(b), 3) for b in beats[::4]],
            "onsets": [round(float(o), 3) for o in onset], "sections": sections}
+    import style as ST
+    res["style"] = ST.guess(ST.features(y, sr, tempo, [float(o) for o in onset], dur))
+    if getattr(a, "genre_model", False):  # learned reading (AudioSet AST) on the loudest section + two more windows
+        top = max(sections, key=lambda x: x["energy"]) if sections else {"start": 0, "end": dur}
+        mid = (top["start"] + top["end"]) / 2
+        wins = [(max(0, mid - 5), mid + 5), (dur * 0.25, dur * 0.25 + 10), (dur * 0.6, dur * 0.6 + 10)]
+        try:
+            res["style"]["model"] = ST.classify(y, sr, [(a0, min(b0, dur)) for a0, b0 in wins])
+        except (RuntimeError, OSError) as e:
+            print(f"[mv] genre model skipped: {e}")
     if a.lyrics:
         res["lyrics_auto"] = whisper_words(audio, a.model, a.language)
     (root / "analysis.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[mv] duration {fmt_t(dur)}  tempo ~{tempo:.1f} bpm  beats {len(beats)}  sections {len(sections)}")
+    st = res["style"]
+    print(f"[mv] style hints: {', '.join(g['genre'] + ' ' + str(g['score']) for g in st['genres'])} · mood {st['mood']} "
+          f"· {st['why']}" + (f" · model: {', '.join(g['genre'] for g in st['model']['genres'])}"
+                              f" {', '.join(m for m, _ in st['model']['moods'])}" if st.get("model") else ""))
     for x in sections:
         print(f"     {fmt_t(x['start'])} - {fmt_t(x['end'])}  energy {x['energy_rel']:.2f}  {x['guess']}")
     if a.lyrics:
@@ -2299,13 +2381,23 @@ def cmd_context(a):
         genre = genre or p.sb.get("genre")
         platforms = platforms or p.sb.get("platforms")
         dur = tsec(p.shots[-1]["end"]) - tsec(p.shots[0]["start"])
+    hints = None
+    if a.project and (Path(a.project) / "analysis.json").exists():
+        hints = json.loads((Path(a.project) / "analysis.json").read_text(encoding="utf-8")).get("style")
     pt = None
     if platforms:
         try:
             pt = PL.plan_text(PL.plan(platforms, dur))
         except ValueError as e:
             die(str(e))
-    print("\n".join(AS.context(genre, platforms, vtype, mood, load_presets(), EC.load_genres(), pt)))
+    out = AS.context(genre, platforms, vtype, mood or (hints or {}).get("mood"), load_presets(), EC.load_genres(), pt)
+    if hints:
+        m = hints.get("model") or {}
+        out[1:1] = [f"Audio hints: {', '.join(g['genre'] for g in hints['genres'])} (heuristic"
+                    + (f"; model: {', '.join(g['genre'] for g in m.get('genres', []))}, "
+                       f"{', '.join(x for x, _ in m.get('moods', []))}" if m else "")
+                    + f") · {hints['mood']} · {hints['why']} - confirm the genre with the lyrics, the artwork and the user", ""]
+    print("\n".join(out))
 
 
 RES_MSG = {
@@ -2562,6 +2654,37 @@ def cmd_deliver(a):
 def ASPECT_V(fmt: str) -> bool:
     w, h = FORMATS.get(fmt, (1, 1))
     return h > w
+
+
+def cmd_stills(a):
+    """Shot ideas from a few images: the most interesting details of each image (faces, texture, contrast) as
+    numbered crops + ready-made `camera:` layers, so one poster becomes several different shots."""
+    p = Project(a.project)
+    ids = [x for x in (a.only.split(",") if a.only else p.sources) if p.source_file(x)
+           and p.source_file(x).suffix.lower() in IMAGE_EXT]
+    if not ids:
+        die("no image sources (declare your poster / photos under sources:)")
+    for sid in ids:
+        f = p.source_file(sid)
+        pts = FG.detail_points(f, a.n)
+        work = p.build / "stills" / sid
+        work.mkdir(parents=True, exist_ok=True)
+        W, H = FG.probe_wh(f)
+        cands = []
+        for i, (x, y, z, why) in enumerate(pts, 1):
+            cw, ch = int(W / z), int(H / z)
+            cx, cy = int(min(max(x * W - cw / 2, 0), W - cw)), int(min(max(y * H - ch / 2, 0), H - ch))
+            out = work / f"d{i}.jpg"
+            run(["ffmpeg", "-v", "error", "-y", "-i", str(f), "-vf", f"crop={cw}:{ch}:{cx}:{cy},scale=320:-2",
+                 "-frames:v", "1", str(out)])
+            cands.append({"thumb": str(out)})
+            print(f"  {i}. {sid} detail [{x:.2f}, {y:.2f}, {z:.1f}] ({why}) -> "
+                  f"{{src: {sid}, camera: {{detail: [{x:.2f}, {y:.2f}, {z:.1f}]}}}}")
+        sheet = p.root / "refs" / f"stills_{sid}.jpg"
+        sheet.parent.mkdir(exist_ok=True)
+        SRC.contact_sheet(cands, sheet, work / "sheet", _sheet_font())
+        print(f"[mv] {sid}: {len(pts)} details -> {sheet}  (plus whole-frame moves: push, pull, pan-left/right/up/down, drift"
+              + ("; `parallax: true` for 2.5D depth" if True else "") + ")")
 
 
 def cmd_check(a):
@@ -3114,7 +3237,9 @@ def main():
     s = sub.add_parser("analyze"); s.add_argument("project"); s.add_argument("--audio")
     s.add_argument("--lyrics", action="store_true"); s.add_argument("--model", default="auto")
     s.add_argument("--language", default="vi"); s.add_argument("--sections", type=int)
-    s.add_argument("--verbose", action="store_true"); s.set_defaults(fn=cmd_analyze)
+    s.add_argument("--verbose", action="store_true")
+    s.add_argument("--genre-model", action="store_true", help="also run the AudioSet genre/mood model (~350 MB first use)")
+    s.set_defaults(fn=cmd_analyze)
     s = sub.add_parser("review"); s.add_argument("project"); s.add_argument("--verbose", action="store_true")
     s.set_defaults(fn=cmd_review)
     s = sub.add_parser("proof", help="one labelled frame per shot in a single sheet")
@@ -3122,6 +3247,8 @@ def main():
     s.add_argument("--format", choices=list(FORMATS)); s.add_argument("--only", help="comma-separated shot ids")
     s.set_defaults(fn=cmd_proof)
     s = sub.add_parser("status", help="project state + next step"); s.add_argument("project"); s.set_defaults(fn=cmd_status)
+    s = sub.add_parser("stills", help="detail crops + camera moves to make several shots from each image")
+    s.add_argument("project"); s.add_argument("--only"); s.add_argument("-n", type=int, default=5); s.set_defaults(fn=cmd_stills)
     s = sub.add_parser("qa", help="check rendered files before publishing")
     s.add_argument("project"); s.add_argument("--mode", choices=list(MODES), default="final"); s.add_argument("--file")
     s.set_defaults(fn=cmd_qa)
