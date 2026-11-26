@@ -34,7 +34,7 @@ tìm và tải clip nguồn, rồi render video cho TikTok, Reels, Shorts hoặc
   Tự kiểm tra font có đủ dấu tiếng Việt.
 
 ## Cần có
-- **FFmpeg** (Windows: `winget install Gyan.FFmpeg` · macOS: `brew install ffmpeg` · Linux: `apt install ffmpeg`)
+- **FFmpeg** để phân tích/dựng (Windows: `winget install Gyan.FFmpeg` · macOS: `brew install ffmpeg` · Linux: `apt install ffmpeg`). Installer vẫn có thể cài skill/runtime trước khi có FFmpeg và sẽ báo rõ phần render đang chờ công cụ này.
 - **Python 3.10+**
 - CPU thường là đủ (bài 4 phút 1080×1920 render ≈ bằng thời lượng bài trên i5 6 nhân). GPU chỉ giúp Whisper và encode nhanh hơn.
 
@@ -64,7 +64,7 @@ git clone https://github.com/ngoctri3110/mv-maker.git && cd mv-maker
 sh install.sh                                          # macOS / Linux
 powershell -ExecutionPolicy Bypass -File install.ps1   # Windows
 ```
-Lệnh này liên kết skill vào `~/.claude/skills/` và `~/.agents/skills/` (Codex) rồi cài thư viện + font.
+Lệnh này liên kết skill vào `~/.claude/skills/` và `~/.agents/skills/` (Codex) rồi cài thư viện + font. Nếu máy chưa có FFmpeg, phần skill/runtime vẫn được cài; chạy `mv doctor` sau khi cài FFmpeg để bật render.
 
 **Chạy thử:** `skills/mv-maker/mv demo all` (Windows: `skills\mv-maker\mv.cmd demo all`) → 4 video demo trong `projects/demo-*`.
 

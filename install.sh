@@ -7,6 +7,10 @@ set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 SRC="$ROOT/skills/mv-maker"
 ONLY="${1:-all}"
+case "$ONLY" in
+  all|claude|codex) ;;
+  *) echo "[mv] usage: install.sh [all|claude|codex]" >&2; exit 2 ;;
+esac
 link() {
   mkdir -p "$(dirname "$1")"
   if [ -L "$1" ]; then rm "$1"; elif [ -e "$1" ]; then echo "[mv] $1 exists and is not a link - skipped"; return; fi

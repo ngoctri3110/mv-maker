@@ -53,7 +53,7 @@ animatic for you to approve, finds and downloads source clips, and renders the f
   in it (`storyboard.md` labels: English / Vietnamese).
 
 ## Requirements
-- **FFmpeg** on PATH (Windows: `winget install Gyan.FFmpeg` · macOS: `brew install ffmpeg` · Linux: `apt install ffmpeg`)
+- **FFmpeg** on PATH for analysis/rendering (Windows: `winget install Gyan.FFmpeg` · macOS: `brew install ffmpeg` · Linux: `apt install ffmpeg`). The installer can set up the skill/runtime first and reports this prerequisite if FFmpeg is missing.
 - **Python 3.10+**
 - Any CPU works for editing (a 4-min 1080×1920 final ≈ real time on a 6-core i5). A GPU only speeds up Whisper and encoding.
 

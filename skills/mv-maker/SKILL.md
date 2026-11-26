@@ -11,7 +11,8 @@ executes it deterministically. Never download footage or render a final before t
 **Tool.** `SKILL_DIR` = the folder containing this SKILL.md (in Claude Code: `${CLAUDE_SKILL_DIR}`).
 Run `SKILL_DIR/mv <cmd>` on macOS/Linux/Git-Bash or `SKILL_DIR\mv.cmd <cmd>` on Windows - below, `mv` means that.
 The first run installs everything into `SKILL_DIR/.venv` (Python deps + font pack); it needs
-FFmpeg on PATH and Python 3.10+. If setup fails, tell the user the exact missing prerequisite.
+Python 3.10+. FFmpeg is required for analysis/rendering, but setup can finish without it so the
+skill can be installed first; `mv doctor` reports the missing renderer and the exact install command.
 Projects live in the user's working directory: `projects/<slug>/` (audio, sources, storyboard, outputs).
 New user / "does it work?" → `mv demo story` (also `blur`, `lyric-poster`, `lyric-styles`, `all`) renders a demo
 with synthetic media in `projects/demo-*`.

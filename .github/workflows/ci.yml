@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependency
+        run: python -m pip install --disable-pip-version-check PyYAML
+      - name: Compile Python sources
+        run: python -m compileall -q skills/mv-maker/scripts
+      - name: Run core tests
+        run: python -m unittest discover -s tests -v
+      - name: Check CLI help
+        run: python skills/mv-maker/scripts/mv.py --help
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate POSIX scripts
+        run: bash -n install.sh skills/mv-maker/setup.sh skills/mv-maker/mv

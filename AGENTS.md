@@ -7,7 +7,7 @@ This repository is **MV Maker**, an agent skill that turns a song into a music v
   "video lyric", or to cut clips to a song, **read `skills/mv-maker/SKILL.md` and follow its workflow**
   (it has two approval gates - do not skip them).
 - Run the tool with `skills/mv-maker/mv <cmd>` (macOS/Linux/Git-Bash) or `skills\mv-maker\mv.cmd <cmd>` (Windows).
-  The first run installs Python deps into `skills/mv-maker/.venv`. Needs FFmpeg + Python 3.10+.
+  The first run installs Python deps into `skills/mv-maker/.venv`; Python 3.10+ is required. FFmpeg is required for analysis/rendering and `mv doctor` reports it when absent.
 - User projects go in `projects/<slug>/` (git-ignored).
 - Smoke test: `skills/mv-maker/mv demo story`.
 

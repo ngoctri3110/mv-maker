@@ -5,9 +5,15 @@
 set -e
 cd "$(dirname "$0")"
 SCOPE="${1:-local}"
+case "$SCOPE" in
+  local|shared) ;;
+  *) echo "[mv] usage: setup.sh [local|shared]" >&2; exit 2 ;;
+esac
+HAS_FFMPEG=1
 if ! command -v ffmpeg >/dev/null 2>&1; then
-  echo "[mv] FFmpeg not found. Install it first:  brew install ffmpeg  |  sudo apt install ffmpeg"
-  exit 1
+  HAS_FFMPEG=0
+  echo "[mv] FFmpeg not found. Setup will continue, but rendering stays unavailable until you install it."
+  echo "      brew install ffmpeg  |  sudo apt install ffmpeg"
 fi
 PY=""
 for c in python3 python; do
@@ -20,6 +26,13 @@ if [ -x "$VENV/bin/python" ]; then VPY="$VENV/bin/python"; else VPY="$VENV/Scrip
 "$VPY" -m pip install --upgrade pip -q
 "$VPY" -m pip install -r requirements.txt -q
 [ "$SCOPE" = "shared" ] && printf '%s' "$(cd "$(dirname "$VPY")" && pwd)/$(basename "$VPY")" > runtime.txt
-"$VPY" scripts/mv.py fonts
-"$VPY" scripts/mv.py doctor
+if ! "$VPY" scripts/mv.py fonts; then
+  echo "[mv] WARNING: font pack download failed; install later with: mv fonts" >&2
+fi
+if ! "$VPY" scripts/mv.py doctor --quick; then
+  echo "[mv] WARNING: machine check failed; run 'mv doctor' after setup." >&2
+fi
+if [ "$HAS_FFMPEG" -eq 0 ]; then
+  echo "[mv] Python runtime is ready. Install FFmpeg later, then run:  $(pwd)/mv doctor"
+fi
 echo "[mv] ready. Try:  $(pwd)/mv demo story"

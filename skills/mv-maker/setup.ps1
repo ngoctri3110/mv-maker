@@ -5,10 +5,10 @@
 param([ValidateSet("local", "shared")] [string]$Scope = "local")
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
-if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
-    Write-Host "[mv] FFmpeg not found on PATH. Install it, then re-open the terminal:"
+$hasFfmpeg = [bool](Get-Command ffmpeg -ErrorAction SilentlyContinue)
+if (-not $hasFfmpeg) {
+    Write-Warning "FFmpeg not found on PATH. Setup will continue, but rendering stays unavailable until you install it."
     Write-Host "     winget install --id Gyan.FFmpeg -e"
-    exit 1
 }
 $py = $null
 foreach ($c in @("py -3", "python")) {
@@ -19,9 +19,25 @@ $sharedHome = if ($env:MV_MAKER_HOME) { $env:MV_MAKER_HOME } else { Join-Path $H
 $venv = if ($Scope -eq "shared") { Join-Path $sharedHome "venv" } else { Join-Path $PSScriptRoot ".venv" }
 $vpy = Join-Path $venv "Scripts\python.exe"
 if (-not (Test-Path $vpy)) { & ([scriptblock]::Create("$py -m venv `"$venv`"")) }
+if (-not (Test-Path $vpy)) { throw "Could not create Python environment at $venv" }
 & $vpy -m pip install --upgrade pip -q
+if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed in $venv" }
 & $vpy -m pip install -r requirements.txt -q
+if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed in $venv" }
 if ($Scope -eq "shared") { Set-Content -Path (Join-Path $PSScriptRoot "runtime.txt") -Value $vpy -Encoding ascii -NoNewline }
-& $vpy scripts\mv.py fonts
-& $vpy scripts\mv.py doctor
+try {
+    & $vpy scripts\mv.py fonts
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Font pack download failed; fonts can be installed later with: mv fonts" }
+} catch {
+    Write-Warning "Font pack download failed; fonts can be installed later with: mv fonts"
+}
+try {
+    & $vpy scripts\mv.py doctor --quick
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Machine check failed; run 'mv doctor' after setup." }
+} catch {
+    Write-Warning "Machine check failed; run 'mv doctor' after setup."
+}
+if (-not $hasFfmpeg) {
+    Write-Host "[mv] Python runtime is ready. Install FFmpeg later, then run:  $PSScriptRoot\mv.cmd doctor"
+}
 Write-Host "`n[mv] ready. Try:  $PSScriptRoot\mv.cmd demo story"
