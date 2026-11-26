@@ -241,6 +241,15 @@ def build(run_bench: bool = True) -> dict:
     return data
 
 
+def save_section(key: str, value) -> None:
+    try:
+        data = json.loads(PROFILE.read_text(encoding="utf-8")) if PROFILE.exists() else {}
+    except ValueError:
+        data = {}
+    data[key] = value
+    PROFILE.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def load_profile() -> dict:
     try:
         return json.loads(PROFILE.read_text(encoding="utf-8")).get("profile", {})
@@ -274,6 +283,11 @@ def print_report(d: dict) -> None:
 
 def install(ids: list[str]) -> None:
     import lyrics as LY
+    import runtime as RT
+    if any(i != "fonts" for i in ids) and not RT.owned_by_mv(Path(sys.executable)):
+        print(f"[mv] refusing to pip-install into {sys.executable}: it is not mv-maker's environment "
+              "(reused via runtime.txt / MV_PYTHON). Use `mv doctor --use-shared` for an mv-maker-owned runtime.")
+        ids = [i for i in ids if i == "fonts"]
     req = SKILL_DIR / "requirements.txt"
     pip = [sys.executable, "-m", "pip", "install"]
     cmds = {"py-deps": pip + ["-r", str(req)], "yt-dlp-update": pip + ["-U", "yt-dlp"],

@@ -52,6 +52,9 @@ import lyrics as LY  # noqa: E402
 import doctor as DR  # noqa: E402
 import fonts as FT  # noqa: E402
 import sources as SRC  # noqa: E402
+import runtime as RT  # noqa: E402
+
+RT.apply_runtime_env()  # FFmpeg chosen with `mv doctor --use-ffmpeg` (this process only)
 
 # Shot cache key includes the renderer source, so code changes re-render cached shots.
 ENGINE_HASH = hashlib.sha1(b"".join(p.read_bytes() for p in sorted(Path(__file__).resolve().parent.glob("*.py")))).hexdigest()[:10]
@@ -1563,13 +1566,35 @@ def cmd_scenes(a):
 
 
 def cmd_doctor(a):
+    try:
+        if a.use_python:
+            return RT.use_python(a.use_python)
+        if a.use_shared:
+            return RT.use_shared()
+        if a.remove_local_venv:
+            return RT.remove_local_venv()
+        if a.use_ffmpeg:
+            return RT.use_ffmpeg(a.use_ffmpeg)
+    except (RuntimeError, OSError, subprocess.CalledProcessError) as e:
+        die(str(e))
+    if a.scan == "machine":  # read-only, only after the user agreed
+        sc = RT.scan("machine")
+        DR.save_section("reuse_scan", sc)
+        print(json.dumps(sc, ensure_ascii=False, indent=1)) if a.json else RT.print_scan(sc)
+        return
     if a.install:
         DR.install([x.strip() for x in a.install.split(",") if x.strip()])
     d = DR.build(run_bench=not a.quick)
+    sc = RT.scan("project")
+    d["reuse_scan"] = sc
+    DR.save_section("reuse_scan", sc)
     if a.json:
         print(json.dumps(d, ensure_ascii=False, indent=1))
     else:
         DR.print_report(d)
+        print()
+        RT.print_scan(sc)
+        print("\n(For tools installed elsewhere on this machine, ask the user before running: mv doctor --scan machine)")
 
 
 def cmd_render(a):
@@ -1645,6 +1670,12 @@ def main():
     s.set_defaults(fn=cmd_render)
     s = sub.add_parser("doctor"); s.add_argument("--quick", action="store_true", help="skip the render benchmark")
     s.add_argument("--json", action="store_true"); s.add_argument("--install", help="comma-separated recommendation ids")
+    s.add_argument("--scan", choices=["project", "machine"], default="project",
+                   help="machine = read-only search for existing envs/FFmpeg/fonts/models (ask the user first)")
+    s.add_argument("--use-python", help="reuse an existing complete Python environment (writes runtime.txt)")
+    s.add_argument("--use-shared", action="store_true", help="use/create the shared runtime ~/.mv-maker/venv")
+    s.add_argument("--remove-local-venv", action="store_true", help="delete this copy's .venv after switching runtime")
+    s.add_argument("--use-ffmpeg", help="use this ffmpeg binary's folder for mv-maker only")
     s.set_defaults(fn=cmd_doctor)
     a = ap.parse_args()
     a.fn(a)

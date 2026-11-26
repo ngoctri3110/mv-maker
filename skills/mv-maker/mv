@@ -1,11 +1,15 @@
 #!/usr/bin/env sh
-# mv-maker launcher (macOS / Linux / Git-Bash). First run sets up .venv + fonts next to this file.
+# mv-maker launcher (macOS / Linux / Git-Bash).
+# Python: $MV_PYTHON > runtime.txt > .venv > ~/.mv-maker/venv > first-run setup.
 D="$(cd "$(dirname "$0")" && pwd)"
-if [ -x "$D/.venv/bin/python" ]; then PY="$D/.venv/bin/python"
-elif [ -x "$D/.venv/Scripts/python.exe" ]; then PY="$D/.venv/Scripts/python.exe"
-else
-  echo "[mv] first run - installing dependencies..."
+SHARED="${MV_MAKER_HOME:-$HOME/.mv-maker}/venv"
+pick() { for c in "$@"; do [ -n "$c" ] && [ -x "$c" ] && { echo "$c"; return; }; done; }
+RT=""
+[ -f "$D/runtime.txt" ] && RT="$(head -n1 "$D/runtime.txt" | tr -d '\r')"
+PY="$(pick "$MV_PYTHON" "$RT" "$D/.venv/bin/python" "$D/.venv/Scripts/python.exe" "$SHARED/bin/python" "$SHARED/Scripts/python.exe")"
+if [ -z "$PY" ]; then
+  echo "[mv] first run - installing dependencies into this skill folder (see: mv doctor --use-shared to share one runtime)..."
   sh "$D/setup.sh" || exit 1
-  if [ -x "$D/.venv/bin/python" ]; then PY="$D/.venv/bin/python"; else PY="$D/.venv/Scripts/python.exe"; fi
+  PY="$(pick "$D/.venv/bin/python" "$D/.venv/Scripts/python.exe")"
 fi
 exec "$PY" "$D/scripts/mv.py" "$@"

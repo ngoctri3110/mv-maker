@@ -6,8 +6,10 @@ __pycache__/
 
 # downloaded at setup (Google Fonts, OFL) - not redistributed here
 skills/mv-maker/fonts/
-# per-machine profile written by `mv doctor`
+# per-machine profile / runtime choice written by `mv doctor`
 skills/mv-maker/machine.json
+skills/mv-maker/runtime.txt
+skills/mv-maker/runtime.json
 
 # user work: audio, footage, renders
 projects/

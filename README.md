@@ -71,6 +71,20 @@ Profile   tier=standard · render encoder=h264_qsv · jobs=3 · whisper=medium �
   [optional] demucs: Vocal separation for much better lyric timing ... -> mv doctor --install demucs
 ```
 
+### No duplicate installs
+Each copy of the skill (plugin, project `.claude/skills`, Codex `~/.agents/skills`) would otherwise build its own
+~0.8 GB Python environment. By default `mv doctor` only looks at the skill, the project and PATH. With your OK the agent
+runs a **read-only** `mv doctor --scan machine` that finds existing mv-maker copies, Python/conda environments that
+already have the packages, a full FFmpeg, installed fonts and downloaded Whisper/Demucs models, and proposes **reuse**:
+| Command | Effect |
+|---|---|
+| `mv doctor --use-shared` | one runtime in `~/.mv-maker/venv` for every copy (created/completed if needed) |
+| `mv doctor --use-python <path>` | reuse a complete existing environment (never modified by mv-maker) |
+| `mv doctor --use-ffmpeg <path>` | use an installed FFmpeg for mv-maker only |
+| `mv doctor --remove-local-venv` | free a copy's own `.venv` after switching |
+Install the shared runtime directly with `setup.ps1 -Scope shared` / `sh setup.sh shared`. Launchers pick Python in
+this order: `MV_PYTHON` → `runtime.txt` → the skill's `.venv` → `~/.mv-maker/venv`.
+
 ## Install
 
 ### Claude Code - as a plugin
@@ -158,6 +172,7 @@ skills/mv-maker/          the skill (portable: copy/link this folder anywhere)
   scripts/doctor.py       machine check, encoder tests, benchmark, recommendations
   scripts/fonts.py        font catalogue, Google Fonts downloader, glyph coverage, palette
   scripts/sources.py      stock/CC search, contact sheets, downloads, own-footage scoring, LRCLIB
+  scripts/runtime.py      runtime choice, duplicate-install detection, reuse/shared runtime
   examples/               demo storyboards
   mv, mv.cmd, setup.*     launchers + first-run setup
 .claude-plugin/           Claude Code plugin + marketplace manifest

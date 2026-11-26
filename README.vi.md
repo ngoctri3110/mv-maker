@@ -44,6 +44,14 @@ Mỗi máy một cấu hình, nên lần đầu dùng agent sẽ chạy `mv doct
 Sau đó render tự dùng encoder nhanh nhất chạy được, Whisper tự chọn model/thiết bị phù hợp. Nó cũng đề xuất nâng cấp
 (Whisper chạy GPU, cập nhật driver, tách giọng demucs, yt-dlp mới, FFmpeg bản đầy đủ) và **agent sẽ hỏi bạn trước khi cài bất cứ thứ gì**.
 
+### Không cài trùng
+Mỗi bản skill (plugin, `.claude/skills` trong project, `~/.agents/skills` cho Codex) vốn tự tạo môi trường Python
+~0,8 GB riêng. Mặc định `mv doctor` chỉ xem thư mục skill, project và PATH. **Khi bạn đồng ý**, agent chạy
+`mv doctor --scan machine` (chỉ đọc) để tìm các bản mv-maker khác, môi trường Python/conda đã có đủ thư viện,
+FFmpeg bản đầy đủ, font đã cài, model Whisper/Demucs đã tải - rồi đề xuất **dùng lại**: `--use-shared` (một môi
+trường chung `~/.mv-maker/venv` cho mọi bản), `--use-python <path>` (dùng env có sẵn, mv-maker không bao giờ sửa env
+không phải của nó), `--use-ffmpeg <path>`, `--remove-local-venv` (giải phóng dung lượng sau khi chuyển).
+
 ## Cài đặt
 **Claude Code (plugin):**
 ```bash
