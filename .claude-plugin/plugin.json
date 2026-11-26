@@ -1,6 +1,6 @@
 {
   "name": "mv-maker",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Turn a song into a music video or lyric video: beat & lyric analysis, technique proposals, storyboard approval, clip sourcing and FFmpeg rendering (soft split-screens, overlays, beat effects, karaoke/kinetic/neon/scrolling lyrics, poster-player lyric videos).",
   "author": { "name": "Tri Nguyen" },
   "license": "MIT",

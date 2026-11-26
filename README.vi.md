@@ -42,6 +42,11 @@ tìm và tải clip nguồn, rồi render video cho TikTok, Reels, Shorts hoặc
   CRT, gradient; không cần footage), đổi cảnh theo bài, bộ màu (theme), thanh spectrum, lyric hiện sớm để hát theo.
 - **Poster player**: 1 ảnh poster → video lyric có nền blur, bìa, tên bài/ca sĩ, sóng nhạc, thanh tiến trình, khung lyric chạy.
 - **Tìm footage**: tìm YouTube, tải đúng đoạn cần, ảnh lưới khung hình có timecode để agent *nhìn* và chọn điểm cắt.
+- **Chọn cảnh theo ý nghĩa** (miễn phí, chạy trên máy, SigLIP 2): mô tả hình ảnh (`look_for: "mưa trên cửa kính ban
+  đêm"`) → `mv scout` xếp hạng clip trên mạng và **tìm đúng giây có cảnh khớp trong video YouTube trước khi tải** (chỉ
+  tải đoạn đó); link TikTok / Facebook / Instagram bạn dán cũng được xếp hạng. `mv match` tự chọn cảnh + điểm vào từ
+  **kho clip của bạn** cho mọi shot `layers: auto`, không lặp cảnh; `mv auto --template pop-bright --genre pop` dựng
+  sẵn khung shot theo nhịp thể loại.
 - **Dựng nhanh**: cache từng shot, bản nháp 540p, bản cuối dùng x264 / NVENC / QuickSync / AMF / VideoToolbox.
 - **Font & kiểu chữ**: dùng **bất kỳ font Google Fonts** nào (`"Kanit:900i"`, `"Archivo:900i@125"`), tự tải khi cần,
   có catalogue theo phong cách và ngôn ngữ (Latin, tiếng Việt, Thái, Nhật, Hàn, Trung, Ả Rập, Hindi…).
@@ -97,7 +102,7 @@ Nói với agent, ví dụ:
 > Làm video lyric punk cho `song.mp3`, không có footage, phong cách grunge.
 
 Quy trình chi tiết: [`skills/mv-maker/SKILL.md`](skills/mv-maker/SKILL.md) · kỹ thuật:
-[`techniques.md`](skills/mv-maker/reference/techniques.md) · thể loại: [`genres.md`](skills/mv-maker/reference/genres.md) · lyric: [`lyrics.md`](skills/mv-maker/reference/lyrics.md) ·
+[`techniques.md`](skills/mv-maker/reference/techniques.md) · thể loại: [`genres.md`](skills/mv-maker/reference/genres.md) · chọn cảnh: [`matching.md`](skills/mv-maker/reference/matching.md) · lyric: [`lyrics.md`](skills/mv-maker/reference/lyrics.md) ·
 storyboard: [`storyboard-schema.md`](skills/mv-maker/reference/storyboard-schema.md)
 
 ## Bản quyền & sử dụng có trách nhiệm

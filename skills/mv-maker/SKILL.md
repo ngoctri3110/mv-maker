@@ -29,6 +29,9 @@ References (read when needed):
   (one cover image -> lyric video), fonts, readability rules
 - `reference/fonts.md` - **fonts & lettering**: any Google Font by spec (`"Kanit:900i"`), catalogue by look and
   language, matching lyric lettering to a poster (recipe + mappings), `typo` (case, colour, outline, shadow, slant)
+- `reference/matching.md` - **finding and choosing footage by description** (SigLIP 2, free, local): writing
+  `look_for`, `mv scout` (search + rank + find the moment inside YouTube videos before downloading), `mv match`
+  (scenes from the user's own clips for `layers: auto` shots)
 - `reference/storyboard-template.yaml` - worked example of every layout
 
 **Language.** These instructions are in English, but talk to the user in *their* language and write everything they
@@ -126,7 +129,10 @@ Write `storyboard.yaml`:
   (snap to the nearest beat). Shots must be contiguous.
 - Map each moment to a technique using `reference/techniques.md` (nostalgia -> split singer/fans + warm grain + dissolve,
   chorus/drop -> faster cuts + flash, bridge -> bw/slow-mo, memory -> screen-blend overlay ...).
-- Every footage need becomes a `sources:` entry with `note` + `search` (what to find). No URLs yet is fine.
+- Every footage need becomes a `sources:` entry with `note` + `search` (site keywords, a list = several phrasings)
+  + `look_for` (the concrete picture, English - see `reference/matching.md`). No URLs yet is fine.
+- Shots to be filled from the user's own clip library: `layers: auto` + `look_for` (translate the lyric's meaning into
+  what a camera sees). `mv auto <p> --template <footage preset> --genre <g>` writes a skeleton cut to the genre grammar.
 Then `mv review projects/<slug>` -> `storyboard.md` (with an **Edit check** table when `genre:` or `role:`/`size:` are set:
 shot length per section vs the genre, performance share, jump cuts, size variety, off-beat cuts, hook, energy build -
 fix real problems before showing it; `mv check` prints the same), and `mv render projects/<slug> --mode proxy` -> an
@@ -136,17 +142,25 @@ the ⭐ recommendation per section, the wow moments, and how to pick alternative
 **Stop and wait for approval / changes.**
 
 ### 5. Source footage -> GATE 2
-Sources in order of preference (safest rights first):
+Sources in order of preference (safest rights first). Semantic ranking needs `mv doctor --install match` (offer it in
+GATE 0 when the user has a clip library or wants online footage found; it may run only on the render machine).
 1. **The user's own footage/photos**: `mv ingest projects/<slug> <folder>` registers every clip/photo as `own1..ownN`
    (in `picks.yaml`, files are referenced in place) and ranks scenes by sharpness, exposure, motion and faces →
-   `refs/ingest_best.jpg` + `candidates/ingest.json`. Open the sheet; use the best moments as `{src: own3, in: 12.4}`.
+   `refs/ingest_best.jpg` + `candidates/ingest.json`. Then `mv match projects/<slug>` fills every `layers: auto` shot
+   with the scene + in-point that best fits its `look_for` (no scene twice) → `matches.yaml` + `refs/match_all.jpg`;
+   **open it and look**, swap with `mv match <p> --pick S07:2`. Or hand-pick moments as `{src: own3, in: 12.4}`.
 2. **Licence-clear stock / CC**: `mv find "<english query>" --project projects/<slug> --slot <source_id>
    [--type video|image] [--orient portrait]` searches Pexels + Pixabay (if `PEXELS_API_KEY` / `PIXABAY_API_KEY` are
    set - free keys, suggest them in GATE 0), Wikimedia Commons and Openverse (no key). It writes a numbered
    contact sheet `refs/cand_<slot>.jpg` - **open it and look**, then `mv pick projects/<slug> <source_id> <slot>:<n>`
    (records url, creator, licence in `picks.yaml`; never rewrites storyboard.yaml).
-3. **YouTube / TikTok / Facebook links** only when the user asks for specific footage: `mv find ... --providers youtube`
-   or the user's links + `section: "m:ss-m:ss"`. Mark rights as unknown and warn about copyright.
+   **Fastest for many sources: `mv scout projects/<slug>`** - every source with `search:` is searched (stock + YouTube),
+   ranked by its `look_for`, and the best YouTube videos are deep-scanned through their preview storyboards to find
+   the matching moment (a suggested `section`, so only those seconds are downloaded) → `refs/cand_<id>.jpg` +
+   `refs/scout.md`. Look at the sheets before proposing picks.
+3. **YouTube / TikTok / Facebook / Instagram** only when the user wants that footage: `mv find "<keywords>" --describe
+   "<picture>" --rank --deep 5`, or rank links the user pasted (`--links links.txt`; TikTok & co. cannot be searched).
+   Mark rights as unknown and warn about copyright.
 Search in English with concrete visual words ("rain on window at night, neon reflections"), several phrasings,
 `--orient portrait` for 9:16. Show the user the chosen list (thumbnails + licence) and **wait for OK before
 downloading**. Then `mv fetch projects/<slug>` (direct files capped at `--max-mb 300`; Commons videos use ≤1080p

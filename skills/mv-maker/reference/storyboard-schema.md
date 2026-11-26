@@ -41,6 +41,8 @@ Source file lookup: `path` if given, else `sources/<id>.(mp4|mkv|webm|mov|jpg|pn
 Source extras: `gen: "<kind>:<colours>"` = generated background, no file needed - `solid`, `gradient`, `blocks`, `smoke`,
 `particles`, `paper`, `grunge`, `crt`; colours `#hex`, `$1`-`$3` (palette) or `$a` (accent), e.g. `gen: "smoke:$1,$3"`.
 `sync: 1.5` = this clip's time at song second 0 (written by `mv sync` into picks.yaml) for `lipsync` layers.
+`search:` site keywords (a list = several phrasings), `look_for:` the picture to rank candidates by, `avoid:`, `orient:`
+- used by `mv scout` (reference/matching.md).
 `picks.yaml` (written by `mv pick` / `mv ingest`) is merged over `sources:` - it adds `url`, `provider`, `creator`,
 `rights`, `page` or a local `path` without touching storyboard.yaml.
 Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
@@ -52,6 +54,8 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 | `start`, `end` | song time, seconds or `m:ss.xx` |
 | `section`, `lyric`, `intent` | documentation for review; `section` also picks preset section extras (intro, verse, pre, chorus/hook, drop, bridge, outro) |
 | `role` | `performance` · `narrative` · `broll` · `concept` - for the edit check (performance share per section) |
+| `look_for` | concrete visual description (string or list of phrasings, English best) for `mv match`; a shot with `look_for` and no layers is matched automatically |
+| `avoid` | what must not be in the picture (`"text, logo"`) - lowers matching scores |
 | `size` | `ews` `wide` `full` `medium` `mcu` `close` `ecu` `insert` `aerial` `pov` - edit check flags jump cuts / no size variety |
 | `layout` | `full` · `split_v` (top/bottom) · `split_h` (left/right) · `split_3v` (3 rows) · `pip` · `fit_blur` (whole source frame centred on its own blurred copy) · `poster` (cover card + blurred cover bg + player UI + lyric panel) |
 | `lyric_style` | per-shot override of the lyric style for lines starting inside this shot |
@@ -63,7 +67,7 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 | `caption_anim` | per-shot override: `fade` · `rise` · `pop` · `none` |
 | `technique`, `alt` | review only: technique IDs from techniques.md / alternative options shown to the user |
 | `inset` | pip only: `{w: 0.5, aspect: "16:9", pos: tr|tl|br|bl|c}` |
-| `layers` | list (see below). First N un-blended layers fill the layout slots in order |
+| `layers` | list (see below). First N un-blended layers fill the layout slots in order. `layers: auto` = the scene `mv match` chose (`matches.yaml`, `use:`) |
 | `fx` | effects on the composed frame |
 | `transition` | into the NEXT shot (see below) |
 | `caption`, `caption_style` | text for the whole shot; style `lyric` (default) · `title` · `credit` |
@@ -71,7 +75,7 @@ Images are allowed as sources (stills; combine with `zoom` for Ken Burns).
 ## Layer
 | field | meaning |
 |---|---|
-| `src` | source id |
+| `src` | source id; `auto` = filled by `mv match` (keeps the layer's other settings, e.g. `fx`) |
 | `in` | start time inside the original source video |
 | `lipsync` | `true` = `in` follows the song (song time + the source's `sync`), so a performance clip stays lip-synced on every cut; a number = explicit offset. Speed must stay 1 |
 | `speed` | 0.5 = slow-mo, 2 = fast |

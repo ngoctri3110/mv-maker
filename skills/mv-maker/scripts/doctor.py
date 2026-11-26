@@ -128,7 +128,8 @@ def py_info() -> dict:
     mods = {m: importlib.util.find_spec(m) is not None for m in PY_MODULES}
     info = {"version": platform.python_version(), "executable": sys.executable,
             "in_skill_venv": str(SKILL_DIR / ".venv") in sys.executable, "modules": mods,
-            "demucs": importlib.util.find_spec("demucs") is not None, "cuda_devices": 0, "yt_dlp_age_days": None}
+            "demucs": importlib.util.find_spec("demucs") is not None, "cuda_devices": 0, "yt_dlp_age_days": None,
+            "match": all(importlib.util.find_spec(m) is not None for m in ("torch", "transformers", "PIL"))}
     if mods.get("faster_whisper"):
         try:
             import ctranslate2
@@ -180,6 +181,8 @@ def build(run_bench: bool = True) -> dict:
         "encoder_best_quality": "libx264",
         "jobs": max(1, min(hw["threads"] // 4, int(hw["ram_gb"] // 4) or 1)),
         "whisper_model": whisper_model, "whisper_device": whisper_dev, "tier": tier,
+        # semantic footage matching (mv find --rank / scout / match): SigLIP 2 base on CPU, so400m ("large") on a GPU
+        "match_model": "large" if py["cuda_devices"] > 0 and hw["ram_gb"] >= 16 else "base",
         "est_final_minutes_per_4min_song": round(240 / fastest * 2.5 / 60, 1) if fastest else None,
     }
 
@@ -218,6 +221,12 @@ def build(run_bench: bool = True) -> dict:
         heavy = "fast on this GPU" if has_nvidia else "slow on CPU (several minutes per song)"
         rec("demucs", "optional", f"Vocal separation for much better lyric timing on dense mixes - ~2 GB (PyTorch), {heavy}.",
             auto="pip install demucs")
+    if not py["match"]:
+        size = "~3 GB (PyTorch CUDA) + model 1.5-4.5 GB" if has_nvidia else "~0.8 GB (PyTorch CPU) + model ~1.5 GB"
+        rec("match", "recommended", "Semantic footage matching (SigLIP 2, free, local): rank online candidates and find the "
+            "matching moment inside YouTube videos before downloading (mv scout / find --rank --deep), and pick scenes "
+            f"from your own clips by description (mv match). {size}; the model downloads on first use.",
+            auto="pip install torch transformers pillow sentencepiece protobuf")
     missing_keys = [k for k in ("PEXELS_API_KEY", "PIXABAY_API_KEY") if not os.environ.get(k)]
     if missing_keys:
         rec("stock-keys", "optional", f"Free API keys widen licence-clear footage search ({', '.join(missing_keys)} not set); "
@@ -292,6 +301,12 @@ def install(ids: list[str]) -> None:
     pip = [sys.executable, "-m", "pip", "install"]
     cmds = {"py-deps": pip + ["-r", str(req)], "yt-dlp-update": pip + ["-U", "yt-dlp"],
             "whisper-cuda": pip + ["nvidia-cublas-cu12", "nvidia-cudnn-cu12==9.*"], "demucs": pip + ["demucs"]}
+    if "match" in ids:  # PyTorch wheel per platform: CUDA on NVIDIA machines, small CPU build elsewhere
+        nv = any("nvidia" in g.lower() for g in gpus())
+        idx = [] if OS == "Darwin" else ["--index-url", "https://download.pytorch.org/whl/" + ("cu128" if nv else "cpu")]
+        cmds["match"] = pip + ["torch"] + idx
+        cmds["match-libs"] = pip + ["transformers>=4.49", "pillow", "sentencepiece", "protobuf"]
+        ids = [i for i in ids if i != "match"] + ["match", "match-libs"]
     for i in ids:
         if i == "fonts":
             LY.download_fonts()

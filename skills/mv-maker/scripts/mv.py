@@ -17,10 +17,17 @@ Subcommands:
   check    <project> [--genre g]     edit check against the genre's cutting grammar (reference/genres.yaml)
   genres                             list genres (cutting grammar + fitting presets)
   sync     <project> <source_id>     find a performance clip's offset to the song (audio match) -> picks.yaml
-  auto     <project> --template t    build a lyric-video storyboard from lyrics.yaml + a template preset
+  auto     <project> --template t    lyric-video storyboard from lyrics.yaml + a template preset; with a footage
+                                     preset + --genre: shots cut to the genre grammar, `layers: auto` for mv match
   search   "query" [-n 10]           list YouTube candidates (id | title | duration | url)
   find     "query" --project p --slot id [--type video|image] [--providers pexels,pixabay,commons,openverse,youtube]
-                                     licence-aware search + numbered contact sheet refs/cand_<slot>.jpg
+           [--describe "visual description" --rank] [--deep 5] [--links "url1 url2"]
+                                     licence-aware search + numbered contact sheet refs/cand_<slot>.jpg; --rank orders
+                                     by how well thumbnails match the description (SigLIP 2), --deep finds the matching
+                                     moment inside YouTube videos from their preview storyboards (no video download)
+  scout    <project>                 find + rank + deep-scan candidates for every source that has `search:`
+  match    <project> [--sheets]      pick scenes from your clips / downloaded sources for shots with `layers: auto`
+                                     (by each shot's `look_for` description) -> matches.yaml + refs/match_all.jpg
   pick     <project> <source_id> <slot:n>   use candidate n for a source (written to picks.yaml)
   ingest   <project> <folder>        register your own clips/photos, rank best moments (refs/ingest_best.jpg)
   lyrics   fetch <project> --artist A --title T   synced lyrics from LRCLIB -> lyrics.yaml
@@ -206,9 +213,12 @@ class Project:
         self.shots: list = self.sb.get("shots") or []
         if not self.shots:
             die("storyboard has no shots")
+        for i, sh in enumerate(self.shots):
+            sh.setdefault("id", f"S{i + 1:02d}")
         if self.sb.get("preset"):
             for sid, info in apply_preset(self.sb, self.shots).items():
                 self.sources.setdefault(sid, info)
+        self._resolve_auto()
         self._resolve_lipsync()
         self.build = self.root / "build"
         self.out = self.root / "out"
@@ -216,6 +226,28 @@ class Project:
         data = json.loads(an.read_text(encoding="utf-8")) if an.exists() else {}
         self.beats: list[float] = data.get("beats", [])
         self.downbeats: list[float] = data.get("downbeats_guess", [])
+
+    def _resolve_auto(self):
+        """`layers: auto` / `{src: auto}` -> the scene `mv match` chose for this shot (matches.yaml, `use:` = choice)."""
+        f = self.root / "matches.yaml"
+        m = ((yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("shots") or {}) if f.exists() else {}
+        for sh in self.shots:
+            if sh.get("layers") == "auto" or (not sh.get("layers") and sh.get("look_for")):
+                sh["layers"] = [{"src": "auto"}]
+            for ly in sh.get("layers") or []:
+                if not isinstance(ly, dict) or ly.get("src") != "auto":
+                    continue
+                ent = m.get(str(sh["id"])) or {}
+                cs = ent.get("candidates") or []
+                k = int(ent.get("use", 1) or 1) - 1
+                if 0 <= k < len(cs):
+                    ly["src"] = cs[k]["src"]
+                    ly.setdefault("in", cs[k].get("in", 0))
+                    if cs[k].get("image"):
+                        ly.setdefault("zoom", "in")
+                else:
+                    ly["src"] = None
+                    ly["note"] = f"auto - run: mv match ({sh.get('look_for') or sh.get('intent') or 'add look_for'})"
 
     def gen_spec(self, sid) -> str | None:
         return (self.sources.get(sid) or {}).get("gen") if sid else None
@@ -306,7 +338,7 @@ class Project:
             prev_end = e
             for ly in sh.get("layers") or []:
                 src = ly.get("src")
-                if src and src not in self.sources:
+                if src and src != "auto" and src not in self.sources:
                     die(f"{sid}: layer src '{src}' is not declared under sources:")
                 mode = ly.get("blend")
                 if mode and mode not in BLEND_MODES:
@@ -1505,19 +1537,73 @@ def _save_picks(root: Path, updates: dict):
                  yaml.safe_dump(cur, allow_unicode=True, sort_keys=False, width=200), encoding="utf-8")
 
 
-def cmd_find(a):
-    provs = [x.strip() for x in a.providers.split(",")] if a.providers else None
-    if provs and set(provs) - set(SRC.PROVIDERS):
-        die(f"providers: {SRC.PROVIDERS}")
-    cands, notes = SRC.find(a.query, a.type, provs, a.orient, a.n)
-    print(f"[mv] '{a.query}' ({a.type}) - " + " · ".join(notes))
+def _embedder(model: str | None):
+    """SigLIP 2 embedder, or None with an install hint (everything still works unranked)."""
+    import match as MT
+    try:
+        return MT.Embedder(model or DR.load_profile().get("match_model"))
+    except RuntimeError as e:
+        print(f"[mv] {e}\n[mv] continuing without semantic ranking")
+        return None
+
+
+def _rank_and_scan(cands: list[dict], describe, emb, work: Path, deep: int = 0, avoid=None) -> list[dict]:
+    """Order candidates by how well their thumbnail matches the description; for the best `deep` YouTube videos read
+    the preview storyboard and find the matching moment (best_t + a suggested `section` to download)."""
+    import match as MT
+    work.mkdir(parents=True, exist_ok=True)
+    for old in work.glob("th_*.jpg"):  # thumbs of an earlier search in this slot
+        old.unlink()
+    qv, nv = MT.query_vector(emb, describe, avoid)
+    thumbs = [SRC.fetch_thumb(c, work / f"th_{i:03d}.jpg") for i, c in enumerate(cands)]
+    have = [(c, t) for c, t in zip(cands, thumbs) if t]
+    vecs = emb.images([t for _, t in have])
+    sims = MT.dot_matrix([qv], vecs)[0]
+    negs = MT.dot_matrix([nv], vecs)[0] if nv else [0.0] * len(vecs)
+    for (c, t), sv, ng in zip(have, sims, negs):
+        c["match"] = round(sv - 0.5 * ng, 4)
+        c["thumb"] = str(t)
+    ranked = sorted([c for c, _ in have], key=lambda c: c["match"], reverse=True) + [c for c, t in zip(cands, thumbs) if not t]
+    for c in [c for c in ranked if c["provider"] == "youtube"][:deep]:
+        try:
+            info = c.get("_info") or SRC.ytdlp_json(c["url"])
+            vid = re.sub(r"\W", "", str(info.get("id") or c["url"]))[-16:]
+            tiles = MT.storyboard_tiles(info, work / f"sb_{vid}", lambda u: SRC._get(u, timeout=20))
+            if not tiles:
+                continue
+            tv = emb.images([p for _, p in tiles])
+            ts = MT.dot_matrix([qv], tv)[0]
+            if nv:
+                ts = [x - 0.5 * y for x, y in zip(ts, MT.dot_matrix([nv], tv)[0])]
+            best_t, a0, b0 = MT.best_run([t for t, _ in tiles], ts)
+            bi = max(range(len(ts)), key=lambda i: ts[i])
+            c.update(best_t=best_t, section=f"{fmt_t(a0)}-{fmt_t(b0)}", thumb=str(tiles[bi][1]),
+                     match=round(max(c.get("match", -1), ts[bi]), 4), deep=True)
+        except Exception as e:
+            print(f"[mv] deep scan skipped for {c['url']}: {str(e)[:80]}")
+    for c in ranked:
+        c.pop("_info", None)
+    return sorted(ranked, key=lambda c: c.get("match", -9), reverse=True)
+
+
+def _find_to_sheet(root: Path, slot: str, query: str | None, kind: str, provs, orient, n: int, describe=None,
+                   emb=None, deep: int = 0, links: list[str] | None = None, avoid=None) -> list[dict]:
+    cands, notes = SRC.find(query, kind, provs, orient, n) if query else ([], [])
+    if links:
+        more, n2 = SRC.from_links(links, n)
+        cands += more
+        notes += n2
+    print(f"[mv] '{query or 'links'}' ({kind}) - " + " · ".join(notes))
     if not cands:
-        die("no results - try other words (English works best), --type image, or other --providers")
-    root = Path(a.project) if a.project else Path(".")
-    slot = a.slot or re.sub(r"[^a-z0-9]+", "_", a.query.lower()).strip("_")[:30]
+        return []
+    work = root / "build" / "cand" / slot
+    if emb is not None and (describe or query):
+        cands = _rank_and_scan(cands, describe or query, emb, work / "rank", deep, avoid)
+    for c in cands:
+        c.pop("_info", None)
     sheet = root / "refs" / f"cand_{slot}.jpg"
     sheet.parent.mkdir(parents=True, exist_ok=True)
-    made = SRC.contact_sheet(cands, sheet, root / "build" / "cand" / slot, _sheet_font())
+    made = SRC.contact_sheet(cands, sheet, work, _sheet_font())
     if made:
         cands = [c for c in cands if c.get("_sheet")]  # numbers on the sheet == candidate numbers
     cdir = root / "candidates"
@@ -1526,8 +1612,80 @@ def cmd_find(a):
     for i, c in enumerate(cands, 1):
         size = f"{c.get('w') or '?'}x{c.get('h') or '?'}"
         dur = f" {float(c['duration']):.0f}s" if c.get("duration") else ""
-        print(f"  {i:2d}. [{c['provider']}] {size}{dur}  {str(c.get('title', ''))[:50]}  - {c.get('creator', '')[:24]}  | {c['license'][:40]}")
+        m = f" match {c['match']:.3f}" if "match" in c else ""
+        at = f" @ {fmt_t(c['best_t'])} -> section {c['section']}" if c.get("section") else ""
+        print(f"  {i:2d}. [{c.get('site') or c['provider']}]{m} {size}{dur}  {str(c.get('title', ''))[:46]}  - "
+              f"{c.get('creator', '')[:20]}{at}  | {c['license'][:32]}")
     print(f"[mv] contact sheet: {sheet if made else '(no thumbnails)'}  ·  pick with: mv pick {root} <source_id> {slot}:<n>")
+    return cands
+
+
+def _links(arg: str | None) -> list[str]:
+    if not arg:
+        return []
+    f = Path(arg)
+    txt = f.read_text(encoding="utf-8") if f.is_file() else arg
+    return [x for x in re.split(r"[\s,]+", txt) if x.startswith("http")]
+
+
+def cmd_find(a):
+    provs = [x.strip() for x in a.providers.split(",")] if a.providers else None
+    if provs and set(provs) - set(SRC.PROVIDERS):
+        die(f"providers: {SRC.PROVIDERS}")
+    if a.deep and provs is None:
+        provs = SRC.default_providers(a.type) + ["youtube"]
+    root = Path(a.project) if a.project else Path(".")
+    slot = a.slot or re.sub(r"[^a-z0-9]+", "_", (a.query or "links").lower()).strip("_")[:30]
+    emb = _embedder(a.model) if (a.rank or a.deep or a.describe) else None
+    if not _find_to_sheet(root, slot, a.query, a.type, provs, a.orient, a.n, a.describe, emb, a.deep, _links(a.links),
+                          a.avoid):
+        die("no results - try other words (English works best), --type image, or other --providers")
+
+
+def cmd_scout(a):
+    """Every source with `search:` and no file / url yet: search, rank by its `look_for` (or note), deep-scan YouTube,
+    one contact sheet per source + refs/scout.md. Nothing is downloaded until you pick (GATE 2)."""
+    p = Project(a.project)
+    provs = [x.strip() for x in a.providers.split(",")] if a.providers else SRC.default_providers("video") + ["youtube"]
+    emb = _embedder(a.model)
+    lines = ["# Scout - candidates per source", "", "Open each sheet, then: `mv pick <project> <source> <source>:<n>` "
+             "(YouTube picks keep the suggested section, so only that part is downloaded).", ""]
+    todo = [(sid, info or {}) for sid, info in p.sources.items()
+            if (info or {}).get("search") and not (info or {}).get("url") and not p.source_file(sid)
+            and (not a.only or sid in a.only.split(","))]
+    if not todo:
+        die("no source needs footage (add `search:` - and ideally `look_for:` - to sources without a file)")
+    for sid, info in todo:
+        queries = info["search"] if isinstance(info["search"], list) else [info["search"]]
+        cands: list[dict] = []
+        for q in queries:  # several phrasings widen the net; results are re-ranked together by the description
+            seen = {c["url"] for c in cands}
+            cands += [c for c in SRC.find(q, info.get("type", "video"), provs, info.get("orient") or a.orient, a.n)[0]
+                      if c["url"] not in seen]
+        describe = info.get("look_for") or info.get("note") or queries[0]
+        if not cands:
+            lines += [f"## {sid}", "", "- no results - rephrase `search:`", ""]
+            continue
+        work = p.root / "build" / "cand" / sid
+        if emb is not None:
+            cands = _rank_and_scan(cands, describe, emb, work / "rank", a.deep, info.get("avoid"))
+        cands = cands[: a.keep]
+        sheet = p.root / "refs" / f"cand_{sid}.jpg"
+        sheet.parent.mkdir(parents=True, exist_ok=True)
+        made = SRC.contact_sheet(cands, sheet, work, _sheet_font())
+        if made:
+            cands = [c for c in cands if c.get("_sheet")]
+        (p.root / "candidates").mkdir(exist_ok=True)
+        (p.root / "candidates" / f"{sid}.json").write_text(json.dumps(cands, ensure_ascii=False, indent=1), encoding="utf-8")
+        lines += [f"## {sid} - {describe}", "", f"![{sid}](cand_{sid}.jpg)", ""]
+        for i, c in enumerate(cands[:6], 1):
+            at = f" · moment {fmt_t(c['best_t'])} (section {c['section']})" if c.get("section") else ""
+            sc = f" · match {c['match']:.3f}" if "match" in c else ""
+            lines.append(f"{i}. [{c.get('site') or c['provider']}] {str(c.get('title', ''))[:60]}{sc}{at} · {c['license'][:40]}")
+        lines.append("")
+        print(f"[mv] {sid}: {len(cands)} candidates -> {sheet}")
+    (p.root / "refs" / "scout.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"[mv] summary: {p.root / 'refs' / 'scout.md'} - look at the sheets, then mv pick (GATE 2 before mv fetch)")
 
 
 def cmd_pick(a):
@@ -1543,12 +1701,13 @@ def cmd_pick(a):
     c = cands[k]
     entry = {"url": c["url"], "provider": c["provider"], "kind": c["kind"], "page": c.get("page"),
              "title": c.get("title"), "creator": c.get("creator"), "rights": c["license"]}
-    if a.section:
-        entry["section"] = a.section
+    if a.section or c.get("section"):
+        entry["section"] = a.section or c["section"]  # deep-scanned YouTube: download only the matching part
+        print(f"[mv] section {entry['section']} (only this part is downloaded; `in:` stays in original video time)")
     _save_picks(root, {a.source: entry})
     print(f"[mv] {a.source} <- [{c['provider']}] {c.get('title', '')[:60]}  ({c['license'][:50]})")
-    if c["provider"] == "youtube":
-        print("[mv] NOTE: YouTube footage is normally copyrighted - confirm permission with the user before publishing")
+    if c["provider"] in ("youtube", "web"):
+        print("[mv] NOTE: this footage is normally copyrighted - confirm permission with the user before publishing")
 
 
 def cmd_ingest(a):
@@ -1590,6 +1749,135 @@ def cmd_ingest(a):
             if "sharpness" in m else "photo"
         print(f"  {i:2d}. {m['src']:<8} in: {m['in']:<6} score {m['score']:.2f}  {extra}  ({m['file']})")
     print(f"[mv] {len(files)} files registered in picks.yaml as {a.prefix}1..{a.prefix}{len(files)} · best moments: {sheet}")
+
+
+def _library(p: "Project", only: list[str] | None, work: Path) -> list[dict]:
+    """Scenes to choose from: every source with a file (your clips from mv ingest, downloaded picks), split into scenes
+    (mv ingest's scene list when present, else scene detection) with 3 sampled frames each."""
+    import match as MT
+    ing = p.root / "candidates" / "ingest.json"
+    known: dict[str, list] = {}
+    if ing.exists():
+        for m in json.loads(ing.read_text(encoding="utf-8")):
+            if "end" in m:
+                known.setdefault(m["src"], []).append({"start": m["start"], "end": m["end"], "score": m.get("score", 0.5)})
+    scenes = []
+    for sid, info in p.sources.items():
+        info = info or {}
+        if info.get("gen") or str(sid).startswith("_scene") or (only and not any(sid == o or sid.startswith(o) for o in only)):
+            continue
+        f = p.source_file(sid)
+        if f is None:
+            continue
+        if f.suffix.lower() in IMAGE_EXT:
+            scenes.append({"src": sid, "start": 0.0, "end": 1e6, "image": True, "quality": 0.5, "frames": [(0.0, f)]})
+            continue
+        off = p.source_offset(sid)  # times in a downloaded section file + offset = original video time (`in:`)
+        segs = known.get(sid)
+        if segs is None:
+            print(f"[mv] scenes in {f.name} ...")
+            segs = SRC.score_scenes(f, max_scenes=80)
+        for sc in segs:
+            fr = [(t + off, MT.extract_frame(f, t, work / "frames" / f"{sid}_{int(t * 100):07d}.jpg"))
+                  for t in MT.frame_times(float(sc["start"]), float(sc["end"]))]
+            scenes.append({"src": sid, "start": float(sc["start"]) + off, "end": float(sc["end"]) + off,
+                           "quality": float(sc.get("score", 0.5)), "frames": fr})
+    return scenes
+
+
+def cmd_match(a):
+    """Choose a scene + in-point for every shot with `layers: auto` (or {src: auto}) by its `look_for` description."""
+    import match as MT
+    p = Project(a.project)
+    raw = (yaml.safe_load((p.root / "storyboard.yaml").read_text(encoding="utf-8")) or {}).get("shots") or []
+    auto_ids = {str(r.get("id") or f"S{i + 1:02d}") for i, r in enumerate(raw)
+                if r.get("layers") == "auto" or (not r.get("layers") and r.get("look_for"))
+                or any(isinstance(l, dict) and l.get("src") == "auto" for l in r.get("layers") or [] if r.get("layers") != "auto")}
+    mf = p.root / "matches.yaml"
+    if a.pick:  # quick switch: S03:2
+        sid, _, k = a.pick.partition(":")
+        data = yaml.safe_load(mf.read_text(encoding="utf-8")) if mf.exists() else None
+        if not data or sid not in (data.get("shots") or {}):
+            die(f"no match list for {sid} - run mv match first")
+        data["shots"][sid]["use"] = int(k)
+        mf.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=200), encoding="utf-8")
+        print(f"[mv] {sid} -> candidate {k}")
+        return
+    targets = [sh for sh in p.shots if str(sh["id"]) in auto_ids]
+    if not targets:
+        die("no shot to match: give shots `layers: auto` (or a layer {src: auto}) and a `look_for:` description")
+    work = p.build / "match"
+    lib = _library(p, a.sources.split(",") if a.sources else None, work)
+    if not lib:
+        die("no footage to choose from - mv ingest <project> <folder> (your clips) or mv fetch the picked sources")
+    emb = _embedder(a.model)
+    if emb is None:
+        die("mv match needs the matching model: mv doctor --install match")
+    cache = MT.EmbCache(work / f"emb_{re.sub(r'[^a-z0-9]+', '_', emb.model_id.lower())}.json", emb)
+    frames = [(i, t, f) for i, sc in enumerate(lib) for t, f in sc["frames"]]
+    vecs = cache.images([f for _, _, f in frames])
+    queries = []
+    for sh in targets:
+        q, av = MT.shot_query(sh)
+        if not q:
+            die(f"{sh['id']}: add `look_for:` (a concrete visual description, English works best)")
+        queries.append(MT.query_vector(emb, q, av))
+    S = MT.dot_matrix([q for q, _ in queries], vecs)
+    cands: dict[str, list[dict]] = {}
+    for qi, sh in enumerate(targets):
+        nv = queries[qi][1]
+        N = MT.dot_matrix([nv], vecs)[0] if nv else None
+        lay = next((l for l in sh.get("layers") or [] if isinstance(l, dict)), {})
+        need = (tsec(sh["end"]) - tsec(sh["start"])) * float(lay.get("speed", 1) or 1)
+        per: dict[int, list] = {}
+        for fi, (si, t, f) in enumerate(frames):
+            per.setdefault(si, []).append((S[qi][fi], N[fi] if N else 0.0, t, f))
+        out = []
+        for si, fs in per.items():
+            sc = lib[si]
+            score = MT.score_scene([x[0] for x in fs], [x[1] for x in fs] if N else None, sc["quality"])
+            if not sc.get("image") and sc["end"] - sc["start"] < need * 0.9:
+                score -= 0.02  # too short for the shot: it would loop / freeze
+            best = max(fs, key=lambda x: x[0] - 0.5 * x[1])
+            out.append({"src": sc["src"], "in": 0.0 if sc.get("image") else MT.in_point(sc, best[2], need),
+                        "scene": f"{fmt_t(sc['start'])}-{fmt_t(sc['end'])}" if not sc.get("image") else "photo",
+                        "score": round(score, 4), "key": f"{sc['src']}@{sc['start']:.2f}", "image": bool(sc.get("image")),
+                        "thumb": Path(best[3]).resolve().relative_to(p.root.resolve()).as_posix()
+                        if Path(best[3]).resolve().is_relative_to(p.root.resolve()) else str(best[3])})
+        cands[str(sh["id"])] = sorted(out, key=lambda c: c["score"], reverse=True)[: max(a.top, 1) * 3]
+    chosen = MT.assign(targets, cands, reuse=a.reuse)
+    shots_out = {}
+    for sh in targets:
+        sid = str(sh["id"])
+        cs = cands[sid]
+        k = chosen.get(sid, 0)
+        keep = cs[: a.top]
+        if k >= a.top:  # the assigned one was further down (others took the best): keep it in the list
+            keep.append(cs[k])
+            k = len(keep) - 1
+        for c in keep:
+            c.pop("key", None)
+            if not c["image"]:
+                c.pop("image")
+        shots_out[sid] = {"look_for": MT.shot_query(sh)[0], "use": k + 1, "candidates": keep}
+    mf.write_text("# written by mv match - `use:` picks the candidate (1 = best); or: mv match <project> --pick S03:2\n" +
+                  yaml.safe_dump({"model": emb.model_id, "shots": shots_out}, allow_unicode=True, sort_keys=False, width=200),
+                  encoding="utf-8")
+    chosen_c = []
+    for i, sh in enumerate(targets, 1):
+        ent = shots_out[str(sh["id"])]
+        c = ent["candidates"][ent["use"] - 1]
+        chosen_c.append({"thumb": str(p.root / c["thumb"]) if not Path(c["thumb"]).is_absolute() else c["thumb"]})
+        print(f"  {i:2d}. {sh['id']:<5} {c['src']:<10} in {c['in']:<7} score {c['score']:.3f}  {str(ent['look_for'])[:60]}")
+    sheet = p.root / "refs" / "match_all.jpg"
+    sheet.parent.mkdir(exist_ok=True)
+    SRC.contact_sheet(chosen_c, sheet, work / "sheet", _sheet_font(), cols=6)
+    for sh in targets if a.sheets else []:
+        ent = shots_out[str(sh["id"])]
+        SRC.contact_sheet([{"thumb": str(p.root / c["thumb"])} for c in ent["candidates"]],
+                          p.root / "refs" / f"match_{sh['id']}.jpg", work / f"sheet_{sh['id']}", _sheet_font())
+    print(f"[mv] wrote {mf} · chosen frames (numbered in shot order): {sheet}"
+          + ("" if a.sheets else " · per-shot alternatives: add --sheets"))
 
 
 def cmd_check(a):
@@ -1701,22 +1989,27 @@ def cmd_auto(a):
     if not pr:
         die(f"unknown template '{a.template}' - lyric templates: "
             + ", ".join(k for k, v in presets.items() if v.get("kind") == "lyric-template"))
-    if pr.get("kind") != "lyric-template":
-        print(f"[mv] note: '{a.template}' is a footage style preset - shots get placeholder cards until you add sources")
+    footage = pr.get("kind") != "lyric-template"
+    if footage and not a.genre:
+        a.genre = next((g for g, v in EC.load_genres().items() if a.template in (v.get("presets") or [])), "pop")
+        print(f"[mv] footage MV: genre {a.genre} (set --genre to change)")
     audio = Path(a.audio) if a.audio else next((f for f in sorted((root / "audio").glob("*"))
                                                 if f.suffix.lower() in (".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac")), None)
     if not audio or not audio.exists():
         die(f"no audio in {root / 'audio'} (or pass --audio)")
     lf = root / "lyrics.yaml"
-    if not lf.exists():
+    if not lf.exists() and not footage:
         die(f"{lf} not found - run mv align / mv lyrics fetch first")
-    lines = sorted((yaml.safe_load(lf.read_text(encoding="utf-8")) or {}).get("lines", []), key=lambda l: float(l["start"]))
-    if not lines:
+    lines = sorted((yaml.safe_load(lf.read_text(encoding="utf-8")) or {}).get("lines", []), key=lambda l: float(l["start"])) \
+        if lf.exists() else []
+    if not lines and not footage:
         die("lyrics.yaml has no lines")
     dur = _duration(audio)
     an = root / "analysis.json"
     data = json.loads(an.read_text(encoding="utf-8")) if an.exists() else {}
     beats, secs = data.get("beats") or [], data.get("sections") or []
+    if footage:
+        return _auto_footage(a, root, audio, dur, lines, beats, secs)
 
     def snap(t):
         if not beats:
@@ -1771,6 +2064,79 @@ def cmd_auto(a):
                    yaml.safe_dump(sb, allow_unicode=True, sort_keys=False, width=200), encoding="utf-8")
     print(f"[mv] wrote {sbp}: {len(shots)} scenes over {fmt_t(dur)} with template {a.template}"
           + ("" if beats else " (no analysis.json - cuts not snapped to beats; run mv analyze first for that)"))
+
+
+def _auto_footage(a, root: Path, audio: Path, dur: float, lines: list, beats: list, secs: list):
+    """Footage MV skeleton cut to the genre grammar: sections from lyrics (or energy), shots of the genre's average length
+    per section (the last chorus faster), snapped to beats, every shot `layers: auto` + `look_for` to fill in."""
+    g = EC.load_genres().get(a.genre)
+    if not g:
+        die(f"unknown genre '{a.genre}' - one of {', '.join(EC.load_genres())}")
+    asl = g.get("asl") or {}
+
+    def snap(t, tol=0.3):
+        if not beats:
+            return t
+        b = min(beats, key=lambda x: abs(x - t))
+        return b if abs(b - t) < tol else t
+
+    blocks = []  # (start, end, section label, lyric lines)
+    if lines:
+        groups: list[list] = []  # consecutive lyric lines with the same section label
+        for ln in lines:
+            lab = str(ln.get("section") or "verse").lower()
+            if groups and groups[-1][0] == lab:
+                groups[-1][1].append(ln)
+            else:
+                groups.append([lab, [ln]])
+        first = float(lines[0]["start"])
+        if first > 2.5:
+            blocks.append([0.0, first - 0.3, "intro", []])
+        for i, (lab, lns) in enumerate(groups):
+            start = blocks[-1][1] if blocks else 0.0
+            end = dur if i == len(groups) - 1 else                 (float(lns[-1]["end"]) + float(groups[i + 1][1][0]["start"])) / 2  # midway into the gap
+            blocks.append([start, end, lab, lns])
+    else:
+        for x in secs or [{"start": 0, "end": dur, "energy_rel": 0.6}]:
+            e = x.get("energy_rel", 0.6)
+            blocks.append([float(x["start"]), float(x["end"]), "chorus" if e > 0.8 else ("bridge" if e < 0.45 else "verse"), []])
+        blocks[0][0], blocks[-1][1] = 0.0, dur
+    for i in range(1, len(blocks)):  # section changes land on a beat
+        blocks[i - 1][1] = blocks[i][0] = snap(blocks[i][0], 0.45)
+    last_chorus = max((i for i, b in enumerate(blocks) if EC.canon(b[2]) in ("chorus", "drop")), default=-1)
+    shots = []
+    for bi, (s, e, lab, lns) in enumerate(blocks):
+        rng = asl.get(EC.canon(lab) or "verse") or asl.get("verse") or [2, 4]
+        target = (rng[0] + rng[1]) / 2 * (0.8 if bi == last_chorus else 1.0)
+        if bi == 0 and a.format == "9:16":
+            target = min(target, 2.5)  # vertical video: the hook lands inside the first 3 s
+        n = max(1, round((e - s) / target))
+        cuts = [s] + [snap(s + (e - s) * k / n) for k in range(1, n)] + [e]
+        for a0, b0 in zip(cuts, cuts[1:]):
+            if b0 - a0 < 0.25:
+                continue
+            words = [str(l["text"]) for l in lns if float(l["start"]) < b0 and float(l["end"]) > a0]
+            sh = {"id": f"S{len(shots) + 1:02d}", "start": round(a0, 3), "end": round(b0, 3), "section": lab,
+                  "layers": "auto", "look_for": f"TODO concrete visual for: {words[0]}" if words else f"TODO {lab} visual"}
+            if words:
+                sh["lyric"] = words[0]
+            shots.append(sh)
+    for x, y in zip(shots, shots[1:]):
+        x["end"] = y["start"]
+    sb = {"title": a.title or root.name, "genre": a.genre, "preset": a.template, "lang": a.lang,
+          "audio": audio.relative_to(root).as_posix() if audio.is_relative_to(root) else str(audio), "format": a.format}
+    if lines:
+        sb["lyrics_file"] = "lyrics.yaml"
+    if a.title or a.artist:
+        sb["title_card"] = {"artist": a.artist or "", "title": a.title or "", "start": 0.4, "dur": 3.5}
+    sb["shots"] = shots
+    (root / "storyboard.yaml").write_text(
+        f"# generated by mv auto --template {a.template} --genre {a.genre}: shots cut to the genre grammar.\n"
+        "# Next: replace every `look_for: TODO ...` with a concrete visual description (English works best;\n"
+        "# a lyric is a metaphor - describe what the camera should SEE), add role/size, then: mv match <project>.\n" +
+        yaml.safe_dump(sb, allow_unicode=True, sort_keys=False, width=200), encoding="utf-8")
+    print(f"[mv] wrote {root / 'storyboard.yaml'}: {len(shots)} shots ({a.genre}) over {fmt_t(dur)} - "
+          f"fill `look_for:` then run: mv match {root}")
 
 
 def cmd_credits(a):
@@ -1975,6 +2341,7 @@ def main():
     s.add_argument("--format", default="9:16", choices=list(FORMATS)); s.add_argument("--audio")
     s.add_argument("--title"); s.add_argument("--artist"); s.add_argument("--lang", default="en")
     s.add_argument("--lines", type=int, default=2, help="max lyric lines per scene (scene variety)")
+    s.add_argument("--genre", help="footage presets: cutting grammar (default: the genre that lists the preset)")
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_auto)
     s = sub.add_parser("fonts", help="pack | list | get | check | preview")
     s.add_argument("action", nargs="?", default="pack", choices=["pack", "list", "get", "check", "preview"])
@@ -1985,10 +2352,28 @@ def main():
     s = sub.add_parser("palette"); s.add_argument("image"); s.add_argument("-n", type=int, default=8)
     s.set_defaults(fn=cmd_palette)
     s = sub.add_parser("find", help="licence-aware footage search with a numbered contact sheet")
-    s.add_argument("query"); s.add_argument("--project"); s.add_argument("--slot", help="name for this search (e.g. the source id)")
+    s.add_argument("query", nargs="?"); s.add_argument("--project"); s.add_argument("--slot", help="name for this search (e.g. the source id)")
+    s.add_argument("--describe", help="visual description to rank by (default: the query)")
+    s.add_argument("--avoid", help="what should NOT be in the picture (e.g. 'text, logo, watermark')")
+    s.add_argument("--rank", action="store_true", help="order by semantic match (SigLIP 2, local, free)")
+    s.add_argument("--deep", type=int, default=0, help="scan the top N YouTube results for the matching moment")
+    s.add_argument("--links", help="file or space-separated URLs (TikTok, Facebook, Instagram, YouTube ...) to rank")
+    s.add_argument("--model", help="matching model: base | large | a Hugging Face id")
     s.add_argument("--type", choices=["video", "image"], default="video")
     s.add_argument("--providers", help=",".join(SRC.PROVIDERS)); s.add_argument("--orient", choices=["portrait", "landscape"])
     s.add_argument("-n", type=int, default=8); s.set_defaults(fn=cmd_find)
+    s = sub.add_parser("scout", help="search + rank + deep-scan candidates for every source with `search:`")
+    s.add_argument("project"); s.add_argument("--providers"); s.add_argument("--orient", choices=["portrait", "landscape"])
+    s.add_argument("-n", type=int, default=8, help="results per provider and phrasing")
+    s.add_argument("--keep", type=int, default=12, help="candidates kept per source after ranking")
+    s.add_argument("--deep", type=int, default=4); s.add_argument("--only", help="comma-separated source ids")
+    s.add_argument("--model"); s.set_defaults(fn=cmd_scout)
+    s = sub.add_parser("match", help="choose scenes from your footage for shots with `layers: auto`")
+    s.add_argument("project"); s.add_argument("--sources", help="comma-separated source ids / prefixes to choose from")
+    s.add_argument("--top", type=int, default=4, help="candidates kept per shot"); s.add_argument("--reuse", action="store_true")
+    s.add_argument("--sheets", action="store_true", help="one contact sheet of alternatives per shot")
+    s.add_argument("--pick", help="switch a shot to another candidate, e.g. S03:2"); s.add_argument("--model")
+    s.set_defaults(fn=cmd_match)
     s = sub.add_parser("pick"); s.add_argument("project"); s.add_argument("source"); s.add_argument("candidate", help="slot:n")
     s.add_argument("--section", help="m:ss-m:ss (YouTube: download only this part)"); s.set_defaults(fn=cmd_pick)
     s = sub.add_parser("ingest", help="register your own clips/photos and rank their best moments")

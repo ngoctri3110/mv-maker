@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-UA = "mv-maker/0.5.1 (+https://github.com/ngoctri3110/mv-maker)"
+UA = "mv-maker/0.7.0 (+https://github.com/ngoctri3110/mv-maker)"
 VIDEO_EXT = (".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi")
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 PROVIDERS = ["pexels", "pixabay", "commons", "openverse", "youtube"]
@@ -21,6 +21,7 @@ LICENSES = {
     "pexels": "Pexels License (free to use, no attribution required; credit appreciated)",
     "pixabay": "Pixabay Content License (free to use, no attribution required)",
     "youtube": "UNKNOWN - YouTube content is usually copyrighted; get permission",
+    "web": "UNKNOWN - social-media clips (TikTok, Facebook, Instagram ...) are copyrighted; get permission",
     "own": "user's own footage",
 }
 
@@ -156,6 +157,55 @@ def search_youtube(q: str, kind: str, orient: str | None, n: int) -> list[dict]:
                     "duration": e.get("duration"), "title": e.get("title", ""), "creator": e.get("channel") or e.get("uploader") or "",
                     "license": LICENSES["youtube"]})
     return out
+
+
+def ytdlp_json(url: str, flat: bool = False, timeout: int = 90) -> dict:
+    """Metadata only (title, thumbnail, duration, formats incl. storyboards) - never downloads the video."""
+    cmd = [sys.executable, "-m", "yt_dlp", "--no-warnings", "--skip-download", "-J"] + (["--flat-playlist"] if flat else [])
+    r = subprocess.run(cmd + [url], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.strip()[-300:])
+    return json.loads(r.stdout)
+
+
+def from_links(links: list[str], n: int = 8) -> tuple[list[dict], list[str]]:
+    """Candidates from links the user pasted (TikTok, Facebook, Instagram, Vimeo, X, YouTube ... anything yt-dlp opens).
+    A profile / hashtag / playlist page expands to its first n videos when yt-dlp supports it. Metadata only."""
+    out, notes = [], []
+    for link in links:
+        try:
+            info = ytdlp_json(link, flat=True)
+            entries = [e.get("url") or e.get("webpage_url") for e in (info.get("entries") or [])][:n]
+            urls = entries or [link]
+            for u in urls:
+                v = ytdlp_json(u) if entries else info  # a single video already came back with full metadata
+                host = urllib.parse.urlparse(v.get("webpage_url") or u).netloc.replace("www.", "")
+                prov = "youtube" if "youtu" in host else "web"
+                out.append({"provider": prov, "kind": "video", "url": v.get("webpage_url") or u,
+                            "page": v.get("webpage_url") or u, "thumb": v.get("thumbnail"),
+                            "duration": v.get("duration"), "title": v.get("title") or v.get("description", "")[:60],
+                            "creator": v.get("uploader") or v.get("channel") or host, "site": host,
+                            "license": LICENSES[prov], "_info": v if prov == "youtube" else None})
+            notes.append(f"{link[:40]}: {len(urls)}")
+        except Exception as e:
+            notes.append(f"{link[:40]}: skipped ({str(e)[:80]})")
+    return out, notes
+
+
+def fetch_thumb(c: dict, dst: Path) -> Path | None:
+    """Local copy of a candidate's thumbnail (URL or path) for ranking / contact sheets."""
+    if dst.exists():
+        return dst
+    try:
+        if c.get("thumb") and Path(str(c["thumb"])).exists():
+            shutil.copy(c["thumb"], dst)
+        elif c.get("thumb"):
+            dst.write_bytes(_get(c["thumb"], timeout=20))
+        else:
+            return None
+        return dst
+    except Exception:
+        return None
 
 
 SEARCHERS = {"pexels": search_pexels, "pixabay": search_pixabay, "commons": search_commons,

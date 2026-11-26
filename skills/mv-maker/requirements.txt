@@ -7,3 +7,4 @@ soundfile
 faster-whisper>=1.0
 fonttools>=4.40
 # optional, heavy (vocal separation for better lyric timing): demucs  ->  mv doctor --install demucs
+# optional, heavy (semantic footage matching, SigLIP 2): torch transformers pillow  ->  mv doctor --install match

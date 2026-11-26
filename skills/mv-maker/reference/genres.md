@@ -57,6 +57,8 @@ V-pop ballads → `ballad`; V-pop dance tracks → `pop`; Vinahouse / remixes �
 
 ## 3. Planning a professional MV in mv-maker
 1. `genre:` + one fitting preset from the table (`preset:`); `cut_lead: 1f` for beat-driven genres.
+   Shortcut: `mv auto <project> --template <preset> --genre <g>` writes a shot skeleton cut to this grammar
+   (`layers: auto` + `look_for` per shot, filled from the user's clips by `mv match` - see matching.md).
 2. Per section, decide the role mix (performance vs story vs b-roll) from the table and write `role:` + `size:` on every
    shot. Plan size changes on every cut from the same source.
 3. Performance footage: one source per camera set-up, `mv sync` each, `lipsync: true` on the layers.

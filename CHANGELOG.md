@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.0] - 2026-11-26
+
+### Added
+
+- Footage chosen by meaning with a free local model (Google SigLIP 2 via transformers, `mv doctor --install match`,
+  imported lazily): shot / source `look_for` + `avoid` descriptions (`reference/matching.md`).
+- `mv scout`: for every source with `search:`, search stock + YouTube, rank candidates by thumbnail, and deep-scan the
+  best YouTube videos through their preview storyboards to find the matching moment before downloading; picks keep
+  the suggested `section`, so only those seconds are fetched. `refs/scout.md` summary.
+- `mv find --describe --rank --deep N --avoid` and `--links` (rank TikTok / Facebook / Instagram / any yt-dlp links).
+- `mv match`: choose a scene and in-point from the user's clip library (and downloaded picks) for every shot with
+  `layers: auto` / `{src: auto}`; global assignment without reusing scenes; `matches.yaml` (`use:`, `--pick S03:2`),
+  `refs/match_all.jpg`; embeddings cached in `build/match/`.
+- `mv auto` with a footage preset + `--genre`: a shot skeleton cut to the genre grammar with `layers: auto`.
+
+### Changed
+
+- The edit check's 3-second hook warning allows a 3.2 s opening shot.
+
 ## [0.6.0] - 2026-11-26
 
 ### Added

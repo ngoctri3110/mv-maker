@@ -51,6 +51,11 @@ animatic for you to approve, finds and downloads source clips, and renders the f
 - **Footage finding**: licence-aware search across Pexels, Pixabay, Wikimedia Commons, Openverse (and YouTube on
   request) with numbered thumbnail sheets the agent looks at, picks recorded with creator + licence, auto
   `credits.txt`; or **your own clips**, auto-split into scenes and ranked by sharpness, exposure, motion and faces.
+- **Footage chosen by meaning** (free, local, SigLIP 2): describe the picture (`look_for: "rain on a window at night"`)
+  and `mv scout` ranks online candidates and finds **the matching moment inside YouTube videos before downloading**
+  (only that section is fetched); TikTok / Facebook / Instagram links you paste are ranked too. `mv match` picks the
+  scene and in-point from **your own clip library** for every `layers: auto` shot - no scene used twice - and
+  `mv auto --template pop-bright --genre pop` writes the shot skeleton cut to the genre grammar.
 - **Synced lyrics in seconds** for released songs via LRCLIB, or Whisper alignment to your lyric text.
 - **Lyrics**: subtitle (bilingual), karaoke fill, word-by-word, typewriter, kinetic stack, neon, Apple-Music style
   scrolling, grunge, paper cut-out, highlighter marker, kinetic stagger (key word huge).
@@ -173,6 +178,8 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 | `mv auto projects/x --template lv-kinetic` | lyric-video storyboard from `lyrics.yaml` + a template |
 | `mv find "query" --project projects/x --slot id` | licence-aware stock/CC search + numbered contact sheet |
 | `mv pick projects/x <id> <slot>:<n>` · `mv ingest projects/x <folder>` | use a candidate · register & rank your own clips |
+| `mv scout projects/x` | search + rank + find the moment in YouTube videos for every source with `search:` |
+| `mv match projects/x [--pick S03:2]` | choose scenes from your footage for `layers: auto` shots by `look_for` |
 | `mv lyrics fetch projects/x --artist A --title T` | synced lyrics from LRCLIB |
 | `mv presets` · `mv credits projects/x` | style presets + lyric templates · attribution list |
 | `mv search "query"` | YouTube candidates |
@@ -185,6 +192,7 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 Storyboard reference: [`reference/storyboard-schema.md`](skills/mv-maker/reference/storyboard-schema.md) ·
 techniques: [`reference/techniques.md`](skills/mv-maker/reference/techniques.md) ·
 genres: [`reference/genres.md`](skills/mv-maker/reference/genres.md) ·
+footage matching: [`reference/matching.md`](skills/mv-maker/reference/matching.md) ·
 lyrics: [`reference/lyrics.md`](skills/mv-maker/reference/lyrics.md)
 
 ## Repository layout

@@ -167,7 +167,7 @@ def check(sb: dict, shots: list, beats: list[float] | None = None, downbeats: li
     vertical = str(sb.get("format", "9:16")) == "9:16"
     if vertical and shots:
         d0 = tsec(shots[0]["end"]) - tsec(shots[0]["start"])
-        if d0 > 3.0 and not sb.get("lyric_style") == "scroll":
+        if d0 > 3.2 and not sb.get("lyric_style") == "scroll":
             warnings.append(T["hook"].format(d=d0))
     if len(chorus_asl) >= 2 and chorus_asl[-1] > chorus_asl[0] * 1.1:
         warnings.append(T["arc"].format(a=chorus_asl[0], b=chorus_asl[-1]))

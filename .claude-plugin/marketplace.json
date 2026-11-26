@@ -7,7 +7,7 @@
       "name": "mv-maker",
       "source": "./",
       "description": "Turn a song into a music video or lyric video with FFmpeg: storyboard-first workflow, soft split-screens, beat-synced effects, animated lyrics and poster-player lyric videos.",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "license": "MIT"
     }
   ]
