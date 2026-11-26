@@ -20,9 +20,10 @@
 | `lyric_highlight` | line | scroll only: `line` or `karaoke` (fill current line word by word) |
 | `lyric_anim` | = caption_anim | subtitle style animation |
 | `lyric_area` | auto | `[x0, y0, x1, y1]` fractions of the frame where lyrics live |
-| `font` / `display_font` | Be Vietnam Pro / Anton | lyric font / big kinetic (stack) font - run `mv fonts` once |
+| `font` / `display_font` | Be Vietnam Pro / Anton | lyric font / big kinetic (stack) font. Font spec: `"Family"`, `"Family:800"`, `"Family:900i"`, `"Family:900i@125"` - any Google Font, downloaded on demand (see fonts.md) |
+| `typo` | | lettering: `{upper, color, outline_color, outline, shadow, shadow_color, spacing, slant, bold}` (see fonts.md) |
 | `accent` | #FFD24D | accent colour: karaoke fill, neon glow, stack highlight, progress bar |
-| `poster` | | poster player: `{title, artist, progress: true, time: true, visualizer: wave|bars|none, visualizer_color}` |
+| `poster` | | poster player: `{title, artist, title_font, artist_font, progress: true, time: true, visualizer: wave|bars|none, visualizer_color}` |
 | `song_reading`, `look` | | review only: interpretation of the song / overall palette + signature + motif |
 | `technique_plan` | | review only: list of `{section, time, meaning, recommend, why, options: [..]}` |
 | `wow_moments` | | review only: list of strings |

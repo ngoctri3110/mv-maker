@@ -9,7 +9,9 @@ Subcommands:
   new      <project>                 create a project skeleton
   analyze  <project> [--lyrics]      tempo / beats / sections (+ whisper lyric timing)
   align    <project>                 lyrics.txt + Whisper timing -> lyrics.yaml (per-word times)
-  fonts                              download the Vietnamese-ready font pack (Google Fonts, OFL)
+  fonts    [pack|list|get|check|preview]  font pack, catalogue (--lang/--tag), download "Family:900i",
+                                     glyph coverage, specimen of candidates over the poster
+  palette  <image>                   dominant colours (accent / text colour picks)
   review   <project>                 storyboard.yaml -> storyboard.md (for human approval)
   search   "query" [-n 10]           list YouTube candidates (id | title | duration | url)
   fetch    <project>                 download every source that has a url (yt-dlp)
@@ -40,6 +42,7 @@ except ImportError:  # pragma: no cover
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lyrics as LY  # noqa: E402
 import doctor as DR  # noqa: E402
+import fonts as FT  # noqa: E402
 
 # Shot cache key includes the renderer source, so code changes re-render cached shots.
 ENGINE_HASH = hashlib.sha1(b"".join(p.read_bytes() for p in sorted(Path(__file__).resolve().parent.glob("*.py")))).hexdigest()[:10]
@@ -317,12 +320,18 @@ class Renderer:
         (self.dir / "labels").mkdir(exist_ok=True)
         self.font = self._font()
 
+    @staticmethod
+    def _sync_fonts(dst: Path):
+        """Font pack + downloaded Google Fonts -> build/fonts (libass reads it via fontsdir)."""
+        dst.mkdir(parents=True, exist_ok=True)
+        for f in list(LY.FONTS_DIR.glob("*.ttf")) + list(FT.GF_DIR.glob("*.ttf")):
+            if not (dst / f.name).exists():
+                shutil.copy(f, dst / f.name)
+
     def _font(self) -> str:
         fonts = self.dir / "fonts"
         fonts.mkdir(exist_ok=True)
-        for f in LY.FONTS_DIR.glob("*.ttf"):  # font pack (mv.py fonts) -> visible to libass via fontsdir
-            if not (fonts / f.name).exists():
-                shutil.copy(f, fonts / f.name)
+        self._sync_fonts(fonts)
         want = self.p.sb.get("font_file")
         cands = [Path(want)] if want else []
         cands.append(LY.FONTS_DIR / "BeVietnamPro-SemiBold.ttf")
@@ -571,9 +580,24 @@ class Renderer:
     def captions(self) -> Path:
         sb, W, H = self.p.sb, self.W, self.H
         s0, t_end = tsec(self.p.shots[0]["start"]), tsec(self.p.shots[-1]["end"])
-        font = sb.get("font") or ("Be Vietnam Pro" if LY.has_font("Be Vietnam Pro") else "Arial")
-        display = sb.get("display_font") or ("Anton" if LY.has_font("Anton") else font)
-        aw = LY.AssWriter(W, H, font, display, sb.get("accent", "#FFD24D"), s0, t_end)
+        base_font = "Be Vietnam Pro" if LY.has_font("Be Vietnam Pro") else "Arial"
+        font = FT.resolve(sb.get("font"), base_font)
+        display = FT.resolve(sb.get("display_font"), "Anton" if LY.has_font("Anton") else font)
+        pc = sb.get("poster") or {}
+        tfont = FT.resolve(pc.get("title_font"), font)
+        afont = FT.resolve(pc.get("artist_font"), font)
+        self._sync_fonts(self.dir / "fonts")
+        lines_all = self.p.lyric_lines()
+        text = "".join(str(l.get("text", "")) + str(l.get("sub", "")) for l in lines_all)
+        typo = sb.get("typo") or {}
+        if typo.get("upper"):
+            text = text.upper()
+        for nm in {font, display}:
+            miss = FT.missing_glyphs(nm, text) if text else []
+            if miss:
+                print(f"[mv] WARN: font '{nm}' lacks {''.join(miss[:20])} - those characters will fall back to another "
+                      f"font. Pick a font covering the lyric language (mv fonts list --lang ...).")
+        aw = LY.AssWriter(W, H, font, display, sb.get("accent", "#FFD24D"), s0, t_end, typo, tfont, afont)
 
         default_anim = sb.get("caption_anim", "fade")
         for sh in self.p.shots:
@@ -909,8 +933,116 @@ def cmd_demo(a):
 
 
 def cmd_fonts(a):
-    LY.download_fonts()
-    print(f"[mv] fonts in {LY.FONTS_DIR}: " + ", ".join(f for f in LY.FONT_PACK if LY.has_font(f)))
+    try:
+        _cmd_fonts(a)
+    except (RuntimeError, ValueError, OSError) as e:
+        die(str(e))
+
+
+def _cmd_fonts(a):
+    act = a.action
+    if act == "pack":
+        LY.download_fonts()
+        print(f"[mv] fonts in {LY.FONTS_DIR}: " + ", ".join(f for f in LY.FONT_PACK if LY.has_font(f)))
+    elif act == "list":
+        rows = FT.catalog(a.lang, a.tag)
+        for r in rows:
+            print(f"  {r['family']:<22} {r['category']:<24} {'italic ' if r['italic'] else '':7} [{r['scripts']}]  {r['tags']}")
+        print(f"[mv] {len(rows)} fonts. Any Google Fonts family works too: mv fonts get \"Family:900i\"")
+    elif act == "get":
+        for spec in a.args:
+            e = FT.ensure(spec)
+            print(f"[mv] {spec:<24} -> {e['name']}  ({e['path'].name})")
+    elif act == "check":
+        text = a.text or ""
+        if a.project:
+            text += "".join(l.get("text", "") for l in Project(a.project).lyric_lines())
+        for spec in a.args:
+            e = FT.ensure(spec)
+            miss = FT.missing_glyphs(e["path"], text)
+            print(f"[mv] {spec:<24} {'OK - covers all characters' if not miss else 'MISSING: ' + ' '.join(miss)}")
+    elif act == "preview":
+        font_preview(a)
+
+
+def font_preview(a):
+    """Render the real lyric text in several candidate fonts over the project's poster/background -> refs/fonts_preview.jpg."""
+    root = Path(a.args[0]) if a.args else Path(".")
+    sb = yaml.safe_load((root / "storyboard.yaml").read_text(encoding="utf-8")) if (root / "storyboard.yaml").exists() else {}
+    specs = [s.strip() for s in (a.fonts or "").split(",") if s.strip()]
+    if not specs:
+        die('give candidates: --fonts "Kanit:900i,Exo 2:900i,Archivo:900i@125"')
+    typo = dict(sb.get("typo") or {})
+    sample = a.text
+    if not sample and (root / "storyboard.yaml").exists() and sb.get("lyrics_file"):
+        ls = Project(root).lyric_lines()
+        sample = ls[0]["text"] if ls else None
+    sample = sample or sb.get("title") or "The quick brown fox"
+    if typo.get("upper"):
+        sample = sample.upper()
+    W, row_h = 1080, 200
+    H = even(150 + len(specs) * row_h + 40)
+    out_dir = root / "build" / "fonts_preview"
+    Renderer._sync_fonts(out_dir / "fonts")
+    slants = []  # "Family:900 +0.2" = preview with a synthetic slant (typo.slant) for upright fonts
+    for k, s in enumerate(specs):
+        base, _, sl = s.partition(" +")
+        specs[k] = base.strip()
+        slants.append(float(sl) if sl else float(typo.get("slant", 0) or 0))
+    entries = [FT.ensure(s) for s in specs]
+    Renderer._sync_fonts(out_dir / "fonts")
+    bg = Path(a.bg) if a.bg else None
+    if not bg:
+        for sid in (sb.get("sources") or {}):
+            for ext in (".jpg", ".jpeg", ".png", ".webp"):
+                if (root / "sources" / f"{sid}{ext}").exists():
+                    bg = root / "sources" / f"{sid}{ext}"
+                    break
+            if bg:
+                break
+    label_font = "Be Vietnam Pro" if LY.has_font("Be Vietnam Pro") else "Arial"
+    col = LY.ass_color(typo.get("color", "#FFFFFF"))
+    ocol = LY.ass_color(typo.get("outline_color", "#000000"))
+    bord = max(0, round(3 * float(typo.get("outline", 1.0))))
+    shad = max(0, round(2 * float(typo.get("shadow", 1.0))))
+    sp = typo.get("spacing", 0)
+    ev = [f"Dialogue: 0,0:00:00.00,0:00:09.00,lab,,0,0,0,,{{\\an7\\pos(60,48)\\fs40}}Font preview · {LY._esc(sb.get('title', root.name))}"]
+    for k, (spec, e) in enumerate(zip(specs, entries)):
+        y = 150 + k * row_h
+        miss = FT.missing_glyphs(e["path"], sample)
+        status = "OK" if not miss else "missing " + " ".join(miss[:8])
+        fs = max(40, min(104, int((W - 120) / max(1, len(sample)) / 0.56)))
+        fax = f"\\fax{-slants[k]:.3f}" if slants[k] else ""
+        label = spec + (f"  (slant {slants[k]})" if slants[k] else "")
+        ev.append(f"Dialogue: 0,0:00:00.00,0:00:09.00,lab,,0,0,0,,{{\\an7\\pos(60,{y})}}{k + 1}. {label}   ·   {status}")
+        ev.append(f"Dialogue: 0,0:00:00.00,0:00:09.00,s,,0,0,0,,{{\\an7\\q2\\pos(60,{y + 42})\\fn{e['name']}\\fs{fs}{fax}}}{LY._esc(sample)}")
+    ass = ["[Script Info]", "ScriptType: v4.00+", f"PlayResX: {W}", f"PlayResY: {H}", "ScaledBorderAndShadow: yes", "",
+           "[V4+ Styles]", "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+           "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
+           "MarginL, MarginR, MarginV, Encoding",
+           f"Style: lab,{label_font},30,&H30FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,7,0,0,0,1",
+           f"Style: s,{label_font},90,{col},{col},{ocol},&H78000000,0,0,0,0,100,100,{sp},0,1,{bord},{shad},7,0,0,0,1",
+           "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text", *ev]
+    (out_dir / "preview.ass").write_text("\n".join(ass) + "\n", encoding="utf-8-sig")
+    if bg and bg.exists():
+        inp = ["-loop", "1", "-i", str(bg.resolve())]
+        vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},gblur=sigma=18,"
+              f"eq=brightness=-0.32:saturation=1.1,subtitles=preview.ass:fontsdir=fonts")
+    else:
+        inp = ["-f", "lavfi", "-i", f"color=c=0x15151c:s={W}x{H}"]
+        vf = "subtitles=preview.ass:fontsdir=fonts"
+    out = root / "refs" / "fonts_preview.jpg"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *inp, "-vf", vf, "-frames:v", "1", "-q:v", "2",
+         str(out.resolve())], cwd=out_dir)
+    print(f"[mv] wrote {out}  - open it and compare; set the winner as `font:` (and `display_font:`) in storyboard.yaml")
+
+
+def cmd_palette(a):
+    pal = FT.palette(Path(a.image), a.n)
+    print("[mv] main tones (dark -> light): " + "  ".join(pal["main"]))
+    print("[mv] vivid accents:              " + ("  ".join(pal["vivid"]) or "none (muted image - use white/black)"))
+    print("     accent: one vivid colour (karaoke fill / glow / progress bar); typo.color / outline_color from main tones")
 
 
 def cmd_align(a):
@@ -1146,7 +1278,14 @@ def main():
     s.add_argument("--lyrics", action="store_true"); s.add_argument("--model", default="auto")
     s.add_argument("--language", default="vi"); s.add_argument("--sections", type=int); s.set_defaults(fn=cmd_analyze)
     s = sub.add_parser("review"); s.add_argument("project"); s.set_defaults(fn=cmd_review)
-    s = sub.add_parser("fonts"); s.set_defaults(fn=cmd_fonts)
+    s = sub.add_parser("fonts", help="pack | list | get | check | preview")
+    s.add_argument("action", nargs="?", default="pack", choices=["pack", "list", "get", "check", "preview"])
+    s.add_argument("args", nargs="*", help="font specs (get/check) or project (preview)")
+    s.add_argument("--lang"); s.add_argument("--tag"); s.add_argument("--text"); s.add_argument("--project")
+    s.add_argument("--fonts", help="comma-separated specs for preview"); s.add_argument("--bg", help="background image for preview")
+    s.set_defaults(fn=cmd_fonts)
+    s = sub.add_parser("palette"); s.add_argument("image"); s.add_argument("-n", type=int, default=8)
+    s.set_defaults(fn=cmd_palette)
     s = sub.add_parser("demo"); s.add_argument("name", nargs="?", default="story", choices=DEMOS + ["all"])
     s.add_argument("--dir", default="projects"); s.add_argument("--mode", choices=list(MODES), default="proxy")
     s.add_argument("--encoder", default="auto"); s.add_argument("--force", action="store_true")

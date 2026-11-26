@@ -27,7 +27,11 @@ tìm và tải clip nguồn, rồi render video cho TikTok, Reels, Shorts hoặc
 - **Poster player**: 1 ảnh poster → video lyric có nền blur, bìa, tên bài/ca sĩ, sóng nhạc, thanh tiến trình, khung lyric chạy.
 - **Tìm footage**: tìm YouTube, tải đúng đoạn cần, ảnh lưới khung hình có timecode để agent *nhìn* và chọn điểm cắt.
 - **Dựng nhanh**: cache từng shot, bản nháp 540p, bản cuối dùng x264 / NVENC / QuickSync / AMF / VideoToolbox.
-- **Font tiếng Việt** đẹp tải sẵn: Be Vietnam Pro, Anton, Montserrat, Playfair Display, Dancing Script, Pacifico.
+- **Font & kiểu chữ**: dùng **bất kỳ font Google Fonts** nào (`"Kanit:900i"`, `"Archivo:900i@125"`), tự tải khi cần,
+  có catalogue theo phong cách và ngôn ngữ (Latin, tiếng Việt, Thái, Nhật, Hàn, Trung, Ả Rập, Hindi…).
+  Agent **bắt font theo poster**: chọn vài font gần giống, lấy màu từ ảnh (`mv palette`), render ảnh xem trước
+  câu lyric thật bằng từng font để bạn chọn (`mv fonts preview`), rồi áp IN HOA, màu, viền, bóng, độ nghiêng (`typo`).
+  Tự kiểm tra font có đủ dấu tiếng Việt.
 
 ## Cần có
 - **FFmpeg** (Windows: `winget install Gyan.FFmpeg` · macOS: `brew install ffmpeg` · Linux: `apt install ffmpeg`)

@@ -63,14 +63,16 @@ Variants: split the song into several poster shots (e.g. swap to a second artwor
 `transition: dissolve:1`), `visualizer: bars` or `none`, add `blend: screen` light-leak layers over the whole frame.
 
 ## Typography
-| Font (pack) | Character | Use |
+Full guide, catalogue and poster matching: **`reference/fonts.md`**. Defaults (installed by setup):
+| Font | Character | Use |
 |---|---|---|
-| Be Vietnam Pro | Modern, very readable, made for Vietnamese | default for lyrics/subtitles/scroll |
+| Be Vietnam Pro | Modern, very readable, Latin + Vietnamese | default for lyrics/subtitles/scroll |
 | Anton | Tall condensed display | `stack`, titles, hooks (uppercase) |
 | Montserrat | Geometric, clean | pop/EDM subtitles |
-| Playfair Display | Elegant serif | ballad, bolero, romantic, cinematic titles |
+| Playfair Display | Elegant serif | ballad, romantic, cinematic titles |
 | Dancing Script / Pacifico | Handwritten | love songs, diary mood, acoustic - short lines only |
-Set `font:` (lyrics) and `display_font:` (stack) in the storyboard; always use fonts with Vietnamese glyphs.
+Set `font:` (lyrics) and `display_font:` (stack) to any Google Font spec (`"Kanit:900i"`); always check the font
+covers the lyric language (`mv fonts check`). With artwork, match its lettering (fonts.md recipe + `typo`).
 
 Readability rules
 - 9:16: ≤ ~30 characters per row, max 2 rows; keep text inside x 8-92 %, y below 20 % and above 80 % of height.

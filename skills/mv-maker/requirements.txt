@@ -5,4 +5,5 @@ opencv-python-headless
 librosa>=0.10
 soundfile
 faster-whisper>=1.0
-# optional, heavy (vocal separation for better lyric timing): demucs
+fonttools>=4.40
+# optional, heavy (vocal separation for better lyric timing): demucs  ->  mv doctor --install demucs

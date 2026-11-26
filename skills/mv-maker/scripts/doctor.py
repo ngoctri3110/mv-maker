@@ -21,7 +21,7 @@ REQUIRED_FILTERS = ["xfade", "zoompan", "gblur", "subtitles", "drawtext", "maske
 HW_ENCODERS = ["h264_nvenc", "hevc_nvenc", "h264_qsv", "hevc_qsv", "h264_amf", "hevc_amf",
                "h264_videotoolbox", "hevc_videotoolbox"]
 PY_MODULES = {"yaml": "PyYAML", "yt_dlp": "yt-dlp", "librosa": "librosa", "soundfile": "soundfile",
-              "faster_whisper": "faster-whisper", "scenedetect": "scenedetect", "cv2": "opencv-python-headless"}
+              "faster_whisper": "faster-whisper", "scenedetect": "scenedetect", "cv2": "opencv-python-headless", "fontTools": "fonttools"}
 OS = platform.system()  # Windows | Darwin | Linux
 
 

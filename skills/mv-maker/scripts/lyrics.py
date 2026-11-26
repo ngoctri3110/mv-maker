@@ -117,36 +117,51 @@ def _esc(t: str) -> str:
     return str(t).replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
 
+TYPO_STYLES = {"lyric", "karaoke", "neon", "big", "scroll", "scrollk", "title", "ptitle"}
+
+
 class AssWriter:
-    def __init__(self, W: int, H: int, font: str, display_font: str, accent: str, s0: float, t_end: float):
+    def __init__(self, W: int, H: int, font: str, display_font: str, accent: str, s0: float, t_end: float,
+                 typo: dict | None = None, title_font: str | None = None, artist_font: str | None = None):
         self.W, self.H, self.s0, self.t_end = W, H, s0, t_end
         self.base = min(W, H)
         self.vertical = H > W
         self.font, self.display, self.accent = font, display_font, accent
         self.mv = int(H * (0.22 if self.vertical else 0.08))  # 9:16 keeps text above TikTok/Reels UI
         self.events: list[str] = []
-        bord, shad = max(1, H // 400), max(1, H // 640)
+        t = self.typo = dict(typo or {})
+        # typo: colour / outline_color / outline / shadow / spacing / slant / upper / bold (poster-matched lettering)
+        om, sm = float(t.get("outline", 1.0)), float(t.get("shadow", 1.0))
+        bord, shad = max(0, round(H / 400 * om)), max(0, round(H / 640 * sm))
+        sp = round(float(t.get("spacing", 0)) * self.base / 1080, 1)
+        bold = 0 if t.get("bold") is False else -1
         b = self.base
-        white, black, shadow = "&H00FFFFFF", "&H00000000", "&H78000000"
+        white = ass_color(t.get("color", "#FFFFFF"))
+        black = ass_color(t.get("outline_color", "#000000"))
+        shadow = ass_color(t.get("shadow_color", "#000000"), 0x78)
         acc = ass_color(accent)
+        slant = float(t.get("slant", 0))  # >0 leans forward like italic; uses ASS \fax shear
+        self.pre = f"\\fax{-slant:.3f}" if slant else ""
+        st = self._style
         self.styles = [
-            self._style("lyric", font, b * 0.066, white, "&H000000FF", black, shadow, -1, 2, self.mv, bord, shad),
-            self._style("title", font, b * 0.10, white, "&H000000FF", black, shadow, -1, 5, 0, bord, shad),
-            self._style("credit", font, b * 0.035, white, "&H000000FF", black, shadow, 0, 1, int(H * 0.05), bord, shad),
-            self._style("karaoke", font, b * 0.066, acc, white, black, shadow, -1, 5, 0, bord, shad),
-            self._style("neon", font, b * 0.07, white, white, acc, "&H00000000", -1, 5, 0, max(2, H // 300), 0),
-            self._style("big", display_font, b * 0.13, white, white, black, "&H96000000", 0, 5, 0, bord, shad * 2),
-            self._style("scroll", font, b * (0.056 if self.vertical else 0.05), white, white, "&H64000000",
-                        "&H00000000", -1, 7, 0, 1, 0),
-            self._style("scrollk", font, b * (0.056 if self.vertical else 0.05), acc, white, "&H64000000",
-                        "&H00000000", -1, 7, 0, 1, 0),
-            self._style("ptitle", font, b * 0.058, white, white, "&H64000000", shadow, -1, 8, 0, 1, shad),
-            self._style("partist", font, b * 0.04, "&H40FFFFFF", white, "&H64000000", shadow, 0, 8, 0, 1, 0),
+            st("lyric", font, b * 0.066, white, "&H000000FF", black, shadow, bold, 2, self.mv, bord, shad, sp),
+            st("title", font, b * 0.10, white, "&H000000FF", black, shadow, bold, 5, 0, bord, shad, sp),
+            st("credit", font, b * 0.035, "&H00FFFFFF", "&H000000FF", "&H00000000", shadow, 0, 1, int(H * 0.05), 1, 1, 0),
+            st("karaoke", font, b * 0.066, acc, white, black, shadow, bold, 5, 0, bord, shad, sp),
+            st("neon", font, b * 0.07, white, white, acc, "&H00000000", bold, 5, 0, max(2, H // 300), 0, sp),
+            st("big", display_font, b * 0.13, white, white, black, ass_color(t.get("shadow_color", "#000000"), 0x96),
+               0, 5, 0, bord, shad * 2, sp),
+            st("scroll", font, b * (0.056 if self.vertical else 0.05), white, white, "&H64000000",
+               "&H00000000", bold, 7, 0, 1, 0, sp),
+            st("scrollk", font, b * (0.056 if self.vertical else 0.05), acc, white, "&H64000000",
+               "&H00000000", bold, 7, 0, 1, 0, sp),
+            st("ptitle", title_font or font, b * 0.058, white, white, "&H64000000", shadow, bold, 8, 0, 1, shad, sp),
+            st("partist", artist_font or font, b * 0.04, "&H40FFFFFF", white, "&H64000000", shadow, 0, 8, 0, 1, 0, 0),
         ]
 
     @staticmethod
-    def _style(name, font, size, prim, sec, outl, back, bold, align, marg_v, bord, shad) -> str:
-        return (f"Style: {name},{font},{int(size)},{prim},{sec},{outl},{back},{bold},0,0,0,100,100,0,0,1,"
+    def _style(name, font, size, prim, sec, outl, back, bold, align, marg_v, bord, shad, spacing=0) -> str:
+        return (f"Style: {name},{font},{int(size)},{prim},{sec},{outl},{back},{bold},0,0,0,100,100,{spacing},0,1,"
                 f"{bord},{shad},{align},0,0,{marg_v},1")
 
     def _ts(self, x: float) -> str:
@@ -158,6 +173,8 @@ class AssWriter:
     def add(self, start, end, style, text, layer=0, ml=0, mr=0):
         if end <= self.s0 or start >= self.t_end or end <= start:
             return
+        if self.pre and style in TYPO_STYLES:  # poster-style slant on every lyric/title event
+            text = "{" + self.pre + text[1:] if text.startswith("{") else "{" + self.pre + "}" + text
         self.events.append(f"Dialogue: {layer},{self._ts(start)},{self._ts(end)},{style},,{ml},{mr},0,,{text}")
 
     def write(self, path: Path) -> None:
@@ -200,6 +217,9 @@ class AssWriter:
         if not lines:
             return
         lines = sorted(lines, key=lambda l: float(l["start"]))
+        if self.typo.get("upper"):
+            lines = [dict(l, text=str(l["text"]).upper(),
+                          words=[[str(w[0]).upper(), w[1], w[2]] for w in l.get("words") or []] or None) for l in lines]
         for i, ln in enumerate(lines):  # display window: hold until the next line when the gap is short
             s, e = float(ln["start"]), float(ln["end"])
             nxt = float(lines[i + 1]["start"]) if i + 1 < len(lines) else None

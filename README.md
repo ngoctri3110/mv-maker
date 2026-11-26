@@ -35,9 +35,14 @@ animatic for you to approve, finds and downloads source clips, and renders the f
 - **Sourcing helpers**: YouTube search, section-only downloads (yt-dlp), contact sheets with timecodes so the agent can
   *look* at footage and pick in-points, scene-cut detection.
 - **Fast iteration**: per-shot caching, proxy renders (540p), final render with x264, NVENC, QuickSync, AMF or VideoToolbox.
+- **Fonts & lettering**: use **any Google Font** by spec (`"Kanit:900i"`, `"Archivo:900i@125"`), downloaded on demand,
+  with a catalogue tagged by look and language (Latin, Vietnamese, Cyrillic, Thai, Japanese, Korean, Chinese, Arabic,
+  Devanagari). The agent can **match the lyrics to your poster's lettering**: it shortlists fonts, extracts the
+  artwork's colours (`mv palette`) and renders a specimen of your real lyric line in each candidate for you to pick
+  (`mv fonts preview`), then applies case, colour, outline, shadow and slant (`typo`). Glyph coverage is checked so
+  diacritics never fall back to another font.
 - **Any language**: the skill is written in English, the agent talks to you in your language and writes the storyboard
-  in it (`storyboard.md` labels: English / Vietnamese). Font pack covers Latin incl. Vietnamese (Be Vietnam Pro, Anton,
-  Montserrat, Playfair Display, Dancing Script, Pacifico); set any installed font for other scripts.
+  in it (`storyboard.md` labels: English / Vietnamese).
 
 ## Requirements
 - **FFmpeg** on PATH (Windows: `winget install Gyan.FFmpeg` · macOS: `brew install ffmpeg` · Linux: `apt install ffmpeg`)
@@ -120,7 +125,8 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 | `mv fetch projects/x` | download sources (only the needed sections) |
 | `mv sheet projects/x <id>` / `mv scenes projects/x <id>` | contact sheet with timecodes / scene cuts |
 | `mv render projects/x --mode proxy\|final [--encoder h264_nvenc]` | render |
-| `mv fonts` / `mv demo [name]` | font pack / demos |
+| `mv fonts list\|get\|check\|preview` · `mv palette <img>` | font catalogue, download, coverage, specimen over the poster · artwork colours |
+| `mv demo [name]` | demos |
 
 Storyboard reference: [`reference/storyboard-schema.md`](skills/mv-maker/reference/storyboard-schema.md) ·
 techniques: [`reference/techniques.md`](skills/mv-maker/reference/techniques.md) ·
@@ -134,6 +140,7 @@ skills/mv-maker/          the skill (portable: copy/link this folder anywhere)
   scripts/mv.py           CLI + FFmpeg graph builder
   scripts/lyrics.py       lyric styles (ASS), poster layout, lyric alignment
   scripts/doctor.py       machine check, encoder tests, benchmark, recommendations
+  scripts/fonts.py        font catalogue, Google Fonts downloader, glyph coverage, palette
   examples/               demo storyboards
   mv, mv.cmd, setup.*     launchers + first-run setup
 .claude-plugin/           Claude Code plugin + marketplace manifest

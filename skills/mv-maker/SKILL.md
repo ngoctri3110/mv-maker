@@ -22,6 +22,8 @@ References (read when needed):
   storytelling devices), mood → quick picks, platform specs. Read it before proposing techniques.
 - `reference/lyrics.md` - **lyric styles catalogue** (subtitle, karaoke, word, typewriter, stack, neon, scroll),
   MV-with-lyrics vs lyric video vs **poster player** (one cover image -> lyric video), fonts, readability rules
+- `reference/fonts.md` - **fonts & lettering**: any Google Font by spec (`"Kanit:900i"`), catalogue by look and
+  language, matching lyric lettering to a poster (recipe + mappings), `typo` (case, colour, outline, shadow, slant)
 - `reference/storyboard-template.yaml` - worked example of every layout
 
 **Language.** These instructions are in English, but talk to the user in *their* language and write everything they
@@ -61,8 +63,8 @@ vocals is approximate: align the user's real lyrics to those timestamps, don't t
 If timing is poor, isolate vocals first (`demucs --two-stems vocals audio/song.mp3`) and pass `--audio` the vocal stem.
 Put the user's lyrics in `lyrics.txt` (one sung line per line, repeats written out), then `mv align projects/<slug>`
 -> `lyrics.yaml` with per-word timing. Report the match % and spot-check a few lines against the audio.
-The font pack (`mv fonts`) is installed by setup; it covers Latin incl. Vietnamese. For other scripts (CJK, Thai,
-Arabic...) set `font:` to an installed font that supports them.
+Setup installs a small default font pack; any other Google Font is fetched on demand by spec (`font: "Kanit:900i"`),
+including Japanese, Korean, Chinese, Thai, Arabic and Devanagari families - see `reference/fonts.md`.
 
 ### 3. Read the song & propose techniques -> part of GATE 1
 Before choosing shots, interpret the song and turn meaning into edit ideas. The user should come away with
@@ -73,9 +75,12 @@ ideas they would not have thought of - not just their own description played bac
 3. **Per-section proposals** (`technique_plan:`): for every section give `meaning`, a ⭐ `recommend` combo of technique IDs
    from `reference/techniques.md`, `why` (one line linking it to the lyric/emotion - e.g. "the line 'back in those days'
    → top half blurred and warm because it is a memory"), and 1-2 `options` that feel different (softer vs. punchier).
-4. **Lyric treatment**: pick `lyric_style` per section from `reference/lyrics.md` (calm verse vs loud chorus),
-   font pairing (`font` / `display_font`) and `accent` colour (from the poster or the MV palette). Offer one
-   alternative style for the chorus. For poster videos also choose 9:16 vs 16:9 and visualizer on/off.
+4. **Lyric treatment**: pick `lyric_style` per section from `reference/lyrics.md` (calm verse vs loud chorus).
+   **Lettering**: if there is a poster/cover/artwork, open it and match its title lettering (`reference/fonts.md`
+   recipe): shortlist 4-7 Google Fonts that cover the lyric language, `mv palette` for colours, render
+   `mv fonts preview` with the real lyric line, show the image with your pick and let the user choose; then set
+   `font` / `display_font` / `poster.title_font` / `typo` / `accent`. Without artwork, pick fonts from the song's mood.
+   Offer one alternative style for the chorus. For poster videos also choose 9:16 vs 16:9 and visualizer on/off.
 5. **Wow moments** (`wow_moments:`): 2-3 signature edits worth the effort (the hook in the first 3 seconds for TikTok,
    the drop into the first chorus, the most important lyric line).
 6. Respect the user's own ideas first; propose techniques that make them land harder, and add alternatives around them.
