@@ -5,203 +5,86 @@ description: Turn a song (audio + lyrics + the user's scene ideas, or just a cov
 
 # MV Maker
 
-Storyboard-driven pipeline. **`storyboard.yaml` is the contract**: the human approves it, the renderer
-executes it deterministically. Never download footage or render a final before the storyboard is approved.
+Storyboard-driven pipeline. **`storyboard.yaml` is the contract**: the human approves it, the renderer executes it.
+Never download footage or render a final before the storyboard is approved.
 
-**Tool.** `SKILL_DIR` = the folder containing this SKILL.md (in Claude Code: `${CLAUDE_SKILL_DIR}`).
-Run `SKILL_DIR/mv <cmd>` on macOS/Linux/Git-Bash or `SKILL_DIR\mv.cmd <cmd>` on Windows - below, `mv` means that.
-The first run installs everything into `SKILL_DIR/.venv` (Python deps + font pack); it needs
-Python 3.10+. FFmpeg is required for analysis/rendering, but setup can finish without it so the
-skill can be installed first; `mv doctor` reports the missing renderer and the exact install command.
-Projects live in the user's working directory: `projects/<slug>/` (audio, sources, storyboard, outputs).
-New user / "does it work?" → `mv demo story` (also `blur`, `lyric-poster`, `lyric-styles`, `pro`, `genre-mv`, `lyric-kinetic`, `lyric-template`, `all`) renders a demo
-with synthetic media in `projects/demo-*`.
+**Tool.** `SKILL_DIR` = the folder of this SKILL.md (in Claude Code: `${CLAUDE_SKILL_DIR}`). Run `SKILL_DIR/mv <cmd>`
+(macOS/Linux/Git-Bash) or `SKILL_DIR\mv.cmd <cmd>` (Windows) - below, `mv`. First run installs Python deps + fonts into
+`SKILL_DIR/.venv` (Python 3.10+; FFmpeg required for analysis/rendering - `mv doctor` reports it). Projects:
+`projects/<slug>/`. "Does it work?" → `mv demo story` (or `all`: synthetic media only).
 
-References (read when needed):
-- `reference/storyboard-schema.md` - every field, layout, fx, transition the renderer supports
-- `reference/genres.md` - **how professional MVs are cut, genre by genre** (performance / story / b-roll intercut,
-  shot-size coverage, lip-sync, shot length per section, cut lead); numbers in `genres.yaml`, measured by `mv check`.
-  Read it before planning a footage-led MV.
-- `reference/techniques.md` - **technique catalogue with IDs** (composition, rhythm, transitions, looks, lyrics,
-  storytelling devices), mood → quick picks, platform specs. Read it before proposing techniques.
-- `reference/lyrics.md` - **lyric styles catalogue** (subtitle, karaoke, word, typewriter, stack, neon, scroll, grunge,
-  paper, marker, stagger), **lyric-video templates** (`mv auto`), MV-with-lyrics vs lyric video vs **poster player**
-  (one cover image -> lyric video), fonts, readability rules
-- `reference/fonts.md` - **fonts & lettering**: any Google Font by spec (`"Kanit:900i"`), catalogue by look and
-  language, matching lyric lettering to a poster (recipe + mappings), `typo` (case, colour, outline, shadow, slant)
-- `reference/matching.md` - **finding and choosing footage by description** (SigLIP 2, free, local): writing
-  `look_for`, `mv scout` (search + rank + find the moment inside YouTube videos before downloading), `mv match`
-  (scenes from the user's own clips for `layers: auto` shots)
-- `reference/platforms.md` - **platform specs and the pre-production plan** (TikTok, Reels, Facebook, Shorts, YouTube:
-  format, length, safe zones, hook, loudness, which sources fit); numbers in `platforms.yaml`, `mv platforms`
-- `reference/storyboard-template.yaml` - worked example of every layout
+**Work lean** (same quality, far fewer tokens):
+- Start or resume with `mv status <project>` (state + NEXT step) instead of re-reading project files.
+- Plan with `mv context --project <p> --type mv|lyric|poster [--genre g] [--platforms ...] [--mood ...]` - a digest of
+  the genre grammar, presets, techniques for the mood, platform plan and fields. Open a full reference only for a
+  specific question, and only the section you need.
+- Footage MV: write a short `plan.yaml` per section (`reference/plan-template.yaml`) and `mv auto <p> --plan plan.yaml`
+  - not one storyboard entry per shot by hand. Edit single shots afterwards.
+- Look at edits with `mv proof <p>` (one labelled sheet, every shot) and `--only S03,S07` after fixes - not frame by frame.
+- Command output is terse; add `--verbose` only when you need every line. `mv review` prints the warnings - no need to
+  re-open storyboard.md yourself (it is for the user).
 
-**Language.** These instructions are in English, but talk to the user in *their* language and write everything they
-read in it: chat summaries, `storyboard.yaml` text fields (`intent`, `note`, `song_reading`, `technique_plan`, `alt`,
-captions) and therefore `storyboard.md` (also set `lang:` so its headings match). Lyrics stay exactly as sung. Pick fonts that cover the lyric language.
+**References** (open when needed): `storyboard-schema.md` (every field) · `genres.md` (pro MV cutting per genre) ·
+`techniques.md` (technique IDs, mood picks) · `lyrics.md` (lyric styles, lyric-video templates, poster player) ·
+`fonts.md` (any Google Font, matching a poster's lettering) · `matching.md` (`look_for`, `mv scout`, `mv match`) ·
+`platforms.md` (platform specs + pre-production plan) · `setup.md` (machine check, final-render machine) ·
+`plan-template.yaml` · `storyboard-template.yaml`.
 
-## Workflow (machine check + 8 steps, approval gates)
+**Language.** Talk to the user in *their* language and write everything they read in it: chat, `storyboard.yaml` text
+fields (`intent`, `note`, `song_reading`, `technique_plan`, `alt`, captions) and so `storyboard.md` (set `lang:`).
+Lyrics stay exactly as sung; pick fonts that cover the lyric language. `look_for` / `search` stay in English.
 
-### 0. Machine check -> GATE 0 (first use on a machine, or when `SKILL_DIR/machine.json` is missing / > 30 days old)
-Run `mv doctor` (~10 s: hardware, FFmpeg features, encoders that actually work, Python deps, render benchmark).
-It writes `machine.json`; `render` (`--encoder auto`) and `analyze` (`--model auto`) then use the best settings found.
-Report to the user in their language, briefly:
-- a small table: CPU / RAM / GPU / disk, chosen encoder, Whisper model + device, tier (light / standard / strong)
-  and the estimated time for a 4-minute 1080p final;
-- what that means for the plan (e.g. tier light → storyboard + proxies here, final on a stronger machine);
-- the recommendations grouped **required / recommended / optional**, each with what it improves, size/time cost and
-  whether it is automatic (`mv doctor --install <id>`) or a manual system step (driver, FFmpeg, app).
-**Avoid duplicate installs.** `mv doctor` also prints a *project-scope* reuse check (this skill's folders, the
-shared runtime `~/.mv-maker`, the current project, tools on PATH). Tools may already exist elsewhere - another
-mv-maker copy (plugin cache, `~/.claude/skills`, `~/.agents/skills`, a project's `.claude/skills`), another skill's
-venv, conda, a fuller FFmpeg, system fonts, downloaded Whisper/Demucs models. Looking for those is outside the project,
-so **ask first** ("May I do a read-only check of your machine for tools you already have, to avoid installing them
-twice? Nothing is changed.") - and if the session runs in a permission mode that prompts for commands, let that prompt
-happen. Only with a yes run `mv doctor --scan machine`. Then offer, per suggestion, **reuse** vs **new install**:
-- `use-shared` - one runtime `~/.mv-maker/venv` for every mv-maker copy (`mv doctor --use-shared`; afterwards
-  `mv doctor --remove-local-venv` frees the old copy's space) - recommended when 2+ copies exist;
-- `reuse-python` - point mv-maker at a complete existing env (`mv doctor --use-python <path>`); mv-maker never
-  installs into or deletes environments it did not create, and warns that the owner's upgrades could affect it;
-- `use-ffmpeg` - use an already installed full FFmpeg for mv-maker only (`mv doctor --use-ffmpeg <path>`);
-- cached models / installed fonts are reused automatically (information only).
-If the user wants it limited to the project, keep the default local `.venv` and do not scan.
-Then **ask which ones to install** (multi-select; required items first). **Never install anything, change drivers or
-system packages, or write outside the project/skill folder (e.g. `~/.mv-maker`) without an explicit yes.** Install the approved automatic items with `mv doctor --install id1,id2`;
-for approved manual items run the shown system command (e.g. `winget`, `brew`, `apt`) or guide the user, then re-run
-`mv doctor` and confirm. If the user declines, continue with what works (everything has a CPU fallback).
-Re-run `mv doctor` whenever a render/encode or Whisper step fails with a hardware/driver error.
+## Workflow (approval gates)
+**0. Machine check → GATE 0** (first use on a machine): `mv doctor`, report briefly, ask before installing anything -
+details and the duplicate-install check in `reference/setup.md`.
 
-### 1. Intake
-`mv new projects/<slug>` then collect into `brief.md`: audio file (put in `audio/`), full lyrics, the user's
-scene ideas per section, platform/aspect (9:16 vs 16:9), full song or a 60s cut. Ask only for what is missing.
+**1. Intake.** `mv new projects/<slug>`; collect only what is missing: audio (`audio/`), lyrics, scene ideas, full song
+or a short cut. **Platforms first, before any footage** (`mv platforms --for <list>`, `platforms.md`): versions (one per
+aspect ratio + a short cut where a platform caps length), master `format:`, which source footage fits, safe zones, hook
+- set `platforms:` / `format:`. **Video type**: A footage MV · B lyric video · C poster player (only a cover → C).
+For A settle the **genre** (`genres.md`) and what footage exists (performance shot to playback, story, b-roll).
+For B without footage: `mv auto <p> --template lv-<look>` (`lyrics.md`).
 
-**Platforms first - before any footage is chosen** (`reference/platforms.md`). Ask where it will be posted (TikTok,
-Instagram Reels, Facebook, YouTube Shorts, YouTube, or all), run `mv platforms --for <list>` and present the plan
-briefly in the user's language: the versions to render (one per aspect ratio, plus a short cut where a platform caps
-length - name the section, usually the first chorus), the master `format:`, what source footage fits (orientation,
-resolution, subjects centred when one source must crop to several ratios), safe zones, the hook. Set `platforms:` and
-`format:` in the storyboard; shot choices, `focus`, the hook and the sourcing (step 5) follow this plan.
+**2. Analyze + time lyrics.** `mv analyze <p> --lyrics` (beats, sections, Whisper words; `--language` = song language).
+Released song: `mv lyrics fetch <p> --artist .. --title ..` (LRCLIB). Else `lyrics.txt` (one sung line per line, repeats
+written out) → `mv align <p>`; it reports the match % and the weak lines to spot-check. Poor timing → demucs vocal stem.
 
-Decide the **video type** early, it changes everything (details in `reference/lyrics.md`):
-A. music MV with lyrics (footage-led) · B. lyric video (text-led) · C. poster player (one cover image + lyric panel).
-If the user only has a poster/cover image, propose C (and B as an upgrade if they want footage).
-For A also settle the **genre** (`genre:` - ballad, pop, kpop, rap, edm, rock, indie, rnb; `reference/genres.md`) and what
-footage exists: performance (artist singing to camera, shot to playback), story, b-roll.
-For B without footage, the fast path is a **template**: `mv analyze` → `mv auto <p> --template lv-<look>` (generated
-backgrounds, scene changes with the song, title card) → review/approve → render; customise on top (lyrics.md).
+**3. Read the song & propose → part of GATE 1.** The user should get ideas they would not have had:
+1. `song_reading`: theme, who sings to whom, emotional arc per section, key images, the 1-2 lines that matter most.
+2. `look`: one palette + one signature technique + one visual motif (S-MOTIF).
+3. `technique_plan` per section: `meaning`, ⭐ `recommend` (technique IDs), `why` (tie it to the lyric/emotion),
+   1-2 different `options`. Base it on a fitting `preset`; respect the user's own ideas first, make them land harder.
+   Shots carry `technique: [IDs]` and, where a real choice exists, `alt: ["option 2: ..."]`.
+4. Lyric treatment: `lyric_style` per section; with artwork, match its lettering (`fonts.md`: shortlist, `mv palette`,
+   `mv fonts preview`, let the user pick).
+5. `wow_moments`: 2-3 signature edits (hook in the first seconds, drop into the first chorus, the key line).
+6. Type A pro grammar (`genres.md`): role mix per section, `role` + `size` per shot, size change on every cut from one
+   source, genre shot lengths, last chorus fastest, `cut_lead: 1f`, `title_card` / `end_card`.
 
-### 2. Analyze the song + time the lyrics
-`mv analyze projects/<slug> --lyrics` -> `analysis.json`: tempo, beat times, downbeats, energy sections,
-and Whisper word timestamps (`--model auto` picks from `machine.json`: `large-v3` on CUDA, else `medium`/`small`;
-`--language` = the song's language code, default `vi`). Whisper on sung
-vocals is approximate: align the user's real lyrics to those timestamps, don't trust Whisper's text.
-If timing is poor, isolate vocals first (`demucs --two-stems vocals audio/song.mp3`) and pass `--audio` the vocal stem.
-**Fastest lyric timing for released songs**: `mv lyrics fetch projects/<slug> --artist "<artist>" --title "<title>"`
-pulls synced line timing from LRCLIB (free) into `lyrics.yaml`; it warns when the track length differs from the audio.
-Otherwise put the user's lyrics in `lyrics.txt` (one sung line per line, repeats written out), then
-`mv align projects/<slug>` -> `lyrics.yaml` with per-word timing. Report the match % and spot-check a few lines.
-Setup installs a small default font pack; any other Google Font is fetched on demand by spec (`font: "Kanit:900i"`),
-including Japanese, Korean, Chinese, Thai, Arabic and Devanagari families - see `reference/fonts.md`.
+**4. Storyboard → GATE 1.** Write it (A: `plan.yaml` → `mv auto --plan`; cuts on beats, shots contiguous). Footage
+needs become `sources:` with `note` + `search` (site keywords) + `look_for` (the concrete picture); shots to fill from
+the user's clips get `layers: auto` + `look_for` (`matching.md`). `mv review <p>` (edit + platform checks - fix real
+problems) and `mv render <p> --mode proxy` (animatic: missing footage = labelled cards). Show `storyboard.md` + the
+animatic, summarise the reading, ⭐ per section, wow moments, how to choose alternatives. **Stop and wait for approval.**
 
-### 3. Read the song & propose techniques -> part of GATE 1
-Before choosing shots, interpret the song and turn meaning into edit ideas. The user should come away with
-ideas they would not have thought of - not just their own description played back.
-1. **Song reading** (`song_reading:`): theme, who sings to whom, the emotional arc section by section
-   (intro → verse → pre → chorus → bridge → outro), key images/metaphors in the lyrics, the 1-2 lines that matter most.
-2. **Look** (`look:`): one overall palette + one signature technique + one visual motif (S-MOTIF) that ties the MV together.
-3. **Per-section proposals** (`technique_plan:`): for every section give `meaning`, a ⭐ `recommend` combo of technique IDs
-   from `reference/techniques.md`, `why` (one line linking it to the lyric/emotion - e.g. "the line 'back in those days'
-   → top half blurred and warm because it is a memory"), and 1-2 `options` that feel different (softer vs. punchier).
-4. **Lyric treatment**: pick `lyric_style` per section from `reference/lyrics.md` (calm verse vs loud chorus).
-   **Lettering**: if there is a poster/cover/artwork, open it and match its title lettering (`reference/fonts.md`
-   recipe): shortlist 4-7 Google Fonts that cover the lyric language, `mv palette` for colours, render
-   `mv fonts preview` with the real lyric line, show the image with your pick and let the user choose; then set
-   `font` / `display_font` / `poster.title_font` / `typo` / `accent`. Without artwork, pick fonts from the song's mood.
-   Offer one alternative style for the chorus. For poster videos also choose 9:16 vs 16:9 and visualizer on/off.
-5. **Wow moments** (`wow_moments:`): 2-3 signature edits worth the effort (the hook in the first 3 seconds for TikTok,
-   the drop into the first chorus, the most important lyric line).
-6. Respect the user's own ideas first; propose techniques that make them land harder, and add alternatives around them.
-   House style: splits use soft seams (feather 0.2) unless hard contrast is the point.
-   **Style presets** (`mv presets`, `reference/presets.yaml`) give a coherent professional look in one line -
-   cinematic-ballad, tiktok-remix, kpop-stage, lofi-chill, rap-kinetic, wedding-romance, edm-neon, vintage-90s.
-   Propose the 1-2 that fit the song as the base (`preset: <name>`), then customise shots on top; shots with
-   `section: chorus/drop/verse/bridge` pick up the preset's section extras automatically.
-7. Each shot gets `technique: [IDs]` and, where a real choice exists, `alt: ["option 2: ..."]`.
-8. **Professional MV grammar** (type A, `reference/genres.md`): per section the role mix from the genre (verses on the
-   story, choruses on the performance, the bridge breaks the pattern), `role:` and `size:` on every shot, a size change
-   on every cut from the same source, shot lengths in the genre's range, the last chorus cut fastest, `cut_lead: 1f`
-   for beat-driven songs, `title_card` over the intro and `end_card` at the close.
+**5. Footage → GATE 2** (safest rights first; ranking needs `mv doctor --install match`):
+1. User's clips: `mv ingest <p> <folder>` → `mv match <p>` fills `layers: auto` shots → **look at**
+   `refs/match_all.jpg`, swap with `--pick S07:2`.
+2. Stock / CC and online: `mv scout <p>` (every source with `search:`; ranks by `look_for`, finds the moment inside
+   YouTube videos so only that section is downloaded) or `mv find ... --rank --deep 5`; **look at** `refs/cand_*.jpg`,
+   `mv pick <p> <source> <slot>:<n>`. TikTok/Facebook/Instagram: rank links the user pasted (`--links`).
+Show the chosen list with licences and **wait for OK**, then `mv fetch <p>`. Performance clips: `mv sync <p> <id>` →
+layers `{src: <id>, lipsync: true}`. Exact in-points by hand: `mv sheet <p> <id>`; `focus: [x, y]` for crops.
 
-### 4. Storyboard -> GATE 1
-Write `storyboard.yaml`:
-- One shot per lyric line or musical phrase; cut points **on beats/downbeats** from `analysis.json`
-  (snap to the nearest beat). Shots must be contiguous.
-- Map each moment to a technique using `reference/techniques.md` (nostalgia -> split singer/fans + warm grain + dissolve,
-  chorus/drop -> faster cuts + flash, bridge -> bw/slow-mo, memory -> screen-blend overlay ...).
-- Every footage need becomes a `sources:` entry with `note` + `search` (site keywords, a list = several phrasings)
-  + `look_for` (the concrete picture, English - see `reference/matching.md`). No URLs yet is fine.
-- Shots to be filled from the user's own clip library: `layers: auto` + `look_for` (translate the lyric's meaning into
-  what a camera sees). `mv auto <p> --template <footage preset> --genre <g>` writes a skeleton cut to the genre grammar.
-Then `mv review projects/<slug>` -> `storyboard.md` (with an **Edit check** table when `genre:` or `role:`/`size:` are set:
-shot length per section vs the genre, performance share, jump cuts, size variety, off-beat cuts, hook, energy build -
-fix real problems before showing it; `mv check` prints the same), and `mv render projects/<slug> --mode proxy` -> an
-**animatic** (missing footage shows as labelled cards, real audio + captions + transitions).
-Show the user `storyboard.md` + the animatic path, and summarise in chat: the song reading in 2-3 lines,
-the ⭐ recommendation per section, the wow moments, and how to pick alternatives (e.g. `S03 -> option 2`).
-**Stop and wait for approval / changes.**
+**6. Proxy loop.** `mv render <p> --mode proxy` (cached per shot) → `mv proof <p>` → fix → `mv proof <p> --only ...`.
 
-### 5. Source footage -> GATE 2
-Sources in order of preference (safest rights first). Semantic ranking needs `mv doctor --install match` (offer it in
-GATE 0 when the user has a clip library or wants online footage found; it may run only on the render machine).
-1. **The user's own footage/photos**: `mv ingest projects/<slug> <folder>` registers every clip/photo as `own1..ownN`
-   (in `picks.yaml`, files are referenced in place) and ranks scenes by sharpness, exposure, motion and faces →
-   `refs/ingest_best.jpg` + `candidates/ingest.json`. Then `mv match projects/<slug>` fills every `layers: auto` shot
-   with the scene + in-point that best fits its `look_for` (no scene twice) → `matches.yaml` + `refs/match_all.jpg`;
-   **open it and look**, swap with `mv match <p> --pick S07:2`. Or hand-pick moments as `{src: own3, in: 12.4}`.
-2. **Licence-clear stock / CC**: `mv find "<english query>" --project projects/<slug> --slot <source_id>
-   [--type video|image] [--orient portrait]` searches Pexels + Pixabay (if `PEXELS_API_KEY` / `PIXABAY_API_KEY` are
-   set - free keys, suggest them in GATE 0), Wikimedia Commons and Openverse (no key). It writes a numbered
-   contact sheet `refs/cand_<slot>.jpg` - **open it and look**, then `mv pick projects/<slug> <source_id> <slot>:<n>`
-   (records url, creator, licence in `picks.yaml`; never rewrites storyboard.yaml).
-   **Fastest for many sources: `mv scout projects/<slug>`** - every source with `search:` is searched (stock + YouTube),
-   ranked by its `look_for`, and the best YouTube videos are deep-scanned through their preview storyboards to find
-   the matching moment (a suggested `section`, so only those seconds are downloaded) → `refs/cand_<id>.jpg` +
-   `refs/scout.md`. Look at the sheets before proposing picks.
-3. **YouTube / TikTok / Facebook / Instagram** only when the user wants that footage: `mv find "<keywords>" --describe
-   "<picture>" --rank --deep 5`, or rank links the user pasted (`--links links.txt`; TikTok & co. cannot be searched).
-   Mark rights as unknown and warn about copyright.
-Search in English with concrete visual words ("rain on window at night, neon reflections"), several phrasings,
-`--orient portrait` for 9:16. Show the user the chosen list (thumbnails + licence) and **wait for OK before
-downloading**. Then `mv fetch projects/<slug>` (direct files capped at `--max-mb 300`; Commons videos use ≤1080p
-transcodes). `out/credits.txt` (written on final render or `mv credits`) lists attributions for the description.
-**Performance footage** (the artist singing, shot to the song's playback): after it is in `sources/`, run
-`mv sync projects/<slug> <source_id>` (matches the clip's own sound to the song, writes `sync:` to picks.yaml; check
-the confidence it prints) and use layers `{src: <id>, lipsync: true}` - every cut stays lip-synced, no `in:` needed.
-
-### 6. Pick exact moments
-`mv sheet projects/<slug> <source_id> --every 2` makes `refs/sheet_<id>.jpg` with timecodes - **open the image and look**
-to choose `in:` points (e.g. the exact frame the door opens, the singer's close-up). `mv scenes ... <id>` lists hard cuts
-inside a source so a shot doesn't straddle an unwanted cut. Set `focus: [x, y]` to keep the subject in a 9:16 crop of 16:9 footage.
-
-### 7. Proxy edit loop
-`mv render projects/<slug> --mode proxy` (540x960, fast, shots cached - only changed shots re-render).
-Check by extracting frames (`ffmpeg -ss <t> -i out/... -frames:v 1 x.jpg`) and looking at them; iterate with the user.
-
-### 8. Final render (strong machine)
-Install the skill on the render machine, copy `projects/<slug>` (incl. `audio/`, `sources/`, `analysis.json`,
-`lyrics.yaml`), then `mv doctor` on that machine, then `mv render projects/<slug> --mode final` (encoder auto = fastest working one).
-For maximum quality when time allows: `--encoder libx264`. Explicit choices: `h264_nvenc` (NVIDIA), `h264_qsv` (Intel),
-`h264_amf` (AMD), `h264_videotoolbox` (Mac).
-Output: `projects/<slug>/out/<slug>_final_<aspect>.mp4`. Other versions from the plan, same edit:
-`mv render <p> --mode final --format 16:9` (look at frames: re-check `focus` / captions in the new crop) and short
-cuts `mv render <p> --mode final --cut 0:45-1:30` (→ `<slug>_cut45-90_final_9x16.mp4`). `mv review` lists missing
-versions under **Platform check**.
+**7. Final** (`setup.md`): `mv render <p> --mode final`, plus `--format` versions and `--cut` short versions from the
+platform plan; `mv proof --mode final` to check; deliver `out/*.mp4` + `out/credits.txt`.
 
 ## Rules
 - Times in storyboard = song time. `in:` = time in the ORIGINAL source video (even when only a `section` was downloaded).
-- Don't invent effects the renderer lacks; extend `scripts/mv.py` (fx_filters / slots_for) and document it in the schema.
+- Don't invent effects the renderer lacks; extend `scripts/mv.py` and document it in the schema.
 - Testing / demos use synthetic media (`mv demo`); never download real footage just to try a feature.
-- Rights: footage from other people's YouTube/TikTok and commercial songs are copyrighted. Platforms Content-ID
-  match both; expect claims, muting, blocks, no monetization. Record `rights:` per source; prefer the artist's own
-  material with permission, licensed/stock (Pexels, Pixabay, Mixkit), Creative Commons, or the user's own footage.
-  Tell the user plainly before publishing; never present downloaded clips as cleared.
+- Rights: other people's footage and commercial songs are copyrighted; platforms fingerprint both (claims, muting,
+  blocks, no monetisation). Record `rights:` per source; prefer the user's own, licensed/stock or CC material. Tell the
+  user plainly before publishing; never present downloaded clips as cleared.

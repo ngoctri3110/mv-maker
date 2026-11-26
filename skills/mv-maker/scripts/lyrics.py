@@ -589,12 +589,14 @@ def align_lines(lines: list[dict], segments: list[dict]) -> tuple[list[dict], fl
             d = (seg["end"] - seg["start"]) / max(1, len(toks))
             ww += [(_norm(t), seg["start"] + k * d, seg["start"] + (k + 1) * d) for k, t in enumerate(toks)]
     times: list = [None] * len(uw)
+    hit = [False] * len(uw)
     matched = 0
     sm = difflib.SequenceMatcher(None, [_norm(w) for _, w in uw], [w[0] for w in ww], autojunk=False)
     for op, i1, i2, j1, j2 in sm.get_opcodes():
         if op == "equal":
             for k in range(i2 - i1):
                 times[i1 + k] = ww[j1 + k][1:]
+                hit[i1 + k] = True
             matched += i2 - i1
         elif op == "replace":
             s, e = ww[j1][1], ww[j2 - 1][2]
@@ -620,8 +622,11 @@ def align_lines(lines: list[dict], segments: list[dict]) -> tuple[list[dict], fl
             span = (b - a) / (nxt - prev)
             times[k] = (a + span * (k - prev - 1), a + span * (k - prev))
     out = [dict(ln, words=[]) for ln in lines]
-    for (li, w), (s, e) in zip(uw, times):
+    got = [0] * len(lines)
+    for (li, w), (s, e), h in zip(uw, times, hit):
         out[li]["words"].append([w, round(s, 2), round(e, 2)])
-    for ln in out:
+        got[li] += h
+    for li, ln in enumerate(out):
         ln["start"], ln["end"] = ln["words"][0][1], ln["words"][-1][2]
+        ln["match"] = round(got[li] / len(ln["words"]), 2)  # per-line confidence (mv align prints weak lines)
     return out, matched / max(1, len(uw))

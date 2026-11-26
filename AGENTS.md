@@ -13,7 +13,8 @@ This repository is **MV Maker**, an agent skill that turns a song into a music v
 
 ## Developing it
 - Renderer: `skills/mv-maker/scripts/mv.py` (CLI, FFmpeg graph builder), `scripts/lyrics.py` (ASS lyric styles,
-  poster geometry, lyric alignment, title cards), `scripts/gen.py` (generated backgrounds), `scripts/editcheck.py`
+  poster geometry, lyric alignment, title cards), `scripts/gen.py` (generated backgrounds), `scripts/assist.py` (proof sheet, `mv context` digest, plan.yaml expansion),
+  `scripts/match.py` (SigLIP 2 footage matching), `scripts/platforms.py` (platform specs/checks), `scripts/editcheck.py`
   (genre edit check, data in `reference/genres.yaml`), `scripts/doctor.py` (machine check; never installs without `--install`) and
   `scripts/runtime.py` (runtime choice + duplicate detection; machine scope is read-only and opt-in; only
   environments mv-maker created - its `.venv` or `~/.mv-maker/venv` - may be installed into or removed). Standard library + PyYAML at import time; heavy deps (librosa, faster-whisper,

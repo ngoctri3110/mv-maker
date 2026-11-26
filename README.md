@@ -116,6 +116,9 @@ often - [`reference/platforms.md`](skills/mv-maker/reference/platforms.md).
 - **Sourcing helpers**: YouTube search, section-only downloads (yt-dlp), contact sheets with timecodes so the agent can
   *look* at footage and pick in-points, scene-cut detection.
 - **Fast iteration**: per-shot caching, proxy renders (540p), final render with x264, NVENC, QuickSync, AMF or VideoToolbox.
+- **Token-lean for the agent**: a 2k-token SKILL.md, `mv context` digests instead of whole reference files, a short
+  `plan.yaml` expanded into every shot, `mv proof` (the whole edit in one image), `mv status` after a context reset and
+  terse command output - roughly 60-70 % fewer tokens per MV at the same quality.
 - **Fonts & lettering**: use **any Google Font** by spec (`"Kanit:900i"`, `"Archivo:900i@125"`), downloaded on demand,
   with a catalogue tagged by look and language (Latin, Vietnamese, Cyrillic, Thai, Japanese, Korean, Chinese, Arabic,
   Devanagari). The agent can **match the lyrics to your poster's lettering**: it shortlists fonts, extracts the
@@ -224,7 +227,11 @@ The agent then follows the workflow in [`skills/mv-maker/SKILL.md`](skills/mv-ma
 | `mv new projects/x` | project skeleton (`audio/ sources/ lyrics.txt brief.md storyboard.yaml`) |
 | `mv analyze projects/x [--lyrics]` | tempo, beats, sections (+ Whisper word timing) |
 | `mv align projects/x` | your `lyrics.txt` + Whisper timing → `lyrics.yaml` |
+| `mv status projects/x` | where the project stands + the next step (cheap to read after a break) |
+| `mv context --project projects/x --type mv --mood "nostalgia"` | planning digest: only the genre, presets, techniques and fields this project needs |
+| `mv auto projects/x --plan plan.yaml` | footage-MV storyboard from a short per-section plan ([`plan-template.yaml`](skills/mv-maker/reference/plan-template.yaml)) |
 | `mv review projects/x` | `storyboard.yaml` → readable `storyboard.md` (+ edit check) |
+| `mv proof projects/x [--only S03,S07]` | one labelled frame per shot in a single sheet - check the whole edit at a glance |
 | `mv check projects/x [--genre pop]` · `mv genres` | edit check against the genre's cutting grammar · list genres |
 | `mv sync projects/x <id>` | lip-sync offset of a performance clip (audio match) → `picks.yaml` |
 | `mv auto projects/x --template lv-kinetic` | lyric-video storyboard from `lyrics.yaml` + a template |

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.0] - 2026-11-26
+
+### Added
+
+- Token-lean workflow for agents (same checks, far fewer tokens):
+  - `mv proof <p> [--only S03,S07]`: one labelled frame per shot in a single sheet instead of many frames.
+  - `plan.yaml` + `mv auto <p> --plan plan.yaml`: a short per-section plan (look_for lists, role / size cycles, fx,
+    `shot_len`, `chorus@last` overrides, a lip-synced `performance` source) expanded into every shot
+    (`reference/plan-template.yaml`).
+  - `mv status <p>`: project state and the next step in a few lines.
+  - `mv context`: a digest of the genre grammar, presets / templates, techniques for a mood, the platform plan and
+    the fields to use, instead of reading every reference file.
+- `mv align` reports per-line match and prints only weak lines (`--verbose` for all); `mv analyze` no longer prints the
+  Whisper transcript unless `--verbose`; `mv review` prints its warnings.
+
+### Changed
+
+- SKILL.md rewritten from ~19 KB to ~8 KB; machine setup and the final-render machine moved to `reference/setup.md`.
+
 ## [0.8.0] - 2026-11-26
 
 ### Added

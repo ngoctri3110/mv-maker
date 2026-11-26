@@ -100,6 +100,9 @@ tiêu đề tự đặt vào trong), **hook** (hình mạnh nhất trong 1-3 gi�
   **kho clip của bạn** cho mọi shot `layers: auto`, không lặp cảnh; `mv auto --template pop-bright --genre pop` dựng
   sẵn khung shot theo nhịp thể loại.
 - **Dựng nhanh**: cache từng shot, bản nháp 540p, bản cuối dùng x264 / NVENC / QuickSync / AMF / VideoToolbox.
+- **Tiết kiệm token cho agent**: SKILL.md gọn (~2k token), `mv context` tóm tắt đúng phần cần thay vì đọc cả tài liệu,
+  `plan.yaml` ngắn tự bung ra từng shot, `mv proof` (cả bản dựng trong 1 ảnh), `mv status` khi tiếp tục phiên mới, output
+  lệnh gọn - giảm khoảng 60-70 % token mỗi MV mà chất lượng giữ nguyên.
 - **Font & kiểu chữ**: dùng **bất kỳ font Google Fonts** nào (`"Kanit:900i"`, `"Archivo:900i@125"`), tự tải khi cần,
   có catalogue theo phong cách và ngôn ngữ (Latin, tiếng Việt, Thái, Nhật, Hàn, Trung, Ả Rập, Hindi…).
   Agent **bắt font theo poster**: chọn vài font gần giống, lấy màu từ ảnh (`mv palette`), render ảnh xem trước

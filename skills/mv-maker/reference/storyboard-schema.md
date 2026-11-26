@@ -1,5 +1,8 @@
 # storyboard.yaml schema
 
+Footage MVs: write a short `plan.yaml` (`plan-template.yaml`) and `mv auto <p> --plan plan.yaml` expands it into the
+shots below; edit single shots afterwards.
+
 ## Top level
 | field | default | meaning |
 |---|---|---|
